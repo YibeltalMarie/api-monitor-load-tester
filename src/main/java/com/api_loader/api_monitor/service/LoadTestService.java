@@ -137,8 +137,8 @@ public class LoadTestService {
      * @param user     the logged-in user (from Dev B)
      * @return         full result including stats
      */
-    @Transactional
-    public TestRunResult startTest(LoadTestRequest request, User user) {
+        @Transactional
+        public UUID startTest(LoadTestRequest request, User user) {
 
         log.info("Starting load test for user '{}': {} {} "
                 + "({} requests, concurrency {})",
@@ -163,86 +163,67 @@ public class LoadTestService {
         log.info("TestRun created with id: {}", testRunId);
 
         try {
-            // ── Step 2: Create virtual thread executor ────
-            // newVirtualThreadPerTaskExecutor() creates one
-            // virtual thread per submitted task automatically.
-            // We wrap in try-with-resources so it shuts down
-            // cleanly when all tasks are done.
-            ExecutorService executor = Executors
-                    .newVirtualThreadPerTaskExecutor();
+                // ── Step 2: Create virtual thread executor ────
+                ExecutorService executor = Executors
+                        .newVirtualThreadPerTaskExecutor();
 
-            // Semaphore controls how many requests run at once
-            // concurrency=10 → max 10 simultaneous requests
-            java.util.concurrent.Semaphore semaphore =
-                    new java.util.concurrent.Semaphore(
-                            request.getConcurrency());
+                // Semaphore controls how many requests run at once
+                java.util.concurrent.Semaphore semaphore =
+                        new java.util.concurrent.Semaphore(
+                                request.getConcurrency());
 
-            // Thread-safe counter for request index (1,2,3...)
-            // AtomicInteger is safe to read/write from multiple
-            // threads simultaneously — regular int is not.
-            AtomicInteger indexCounter = new AtomicInteger(0);
+                // Thread-safe counter for request index
+                AtomicInteger indexCounter = new AtomicInteger(0);
 
-            // ── Step 3: Submit all requests as tasks ──────
-            // We collect all Future objects so we can wait
-            // for every task to complete in Step 4.
-            List<Future<SingleRequestResult>> futures =
-                    new ArrayList<>();
+                // ── Step 3: Submit all requests as tasks ──────
+                List<Future<SingleRequestResult>> futures =
+                        new ArrayList<>();
 
-            for (int i = 0; i < request.getTotalRequests(); i++) {
+                for (int i = 0; i < request.getTotalRequests(); i++) {
                 Future<SingleRequestResult> future = executor.submit(() -> {
-
-                    // Acquire semaphore — blocks if concurrency
-                    // limit is already reached. Releases when
-                    // this request completes (in finally block).
-                    semaphore.acquire();
-                    try {
+                        semaphore.acquire();
+                        try {
                         return httpClientService.fire(
                                 request.getUrl(),
                                 request.getMethod(),
                                 request.getRequestBody(),
                                 request.getHeaders(),
                                 request.getTimeoutSeconds());
-                    } finally {
-                        // ALWAYS release — even if request fails
-                        // Without finally, a failed request would
-                        // hold the semaphore slot forever
+                        } finally {
                         semaphore.release();
-                    }
+                        }
                 });
 
                 futures.add(future);
-            }
-
-            // ── Step 4: Wait for ALL requests to complete ─
-            // future.get() blocks until that task is done.
-            // We collect all results in order.
-            List<SingleRequestResult> results = new ArrayList<>();
-            for (Future<SingleRequestResult> future : futures) {
-                try {
-                    results.add(future.get());
-                } catch (Exception ex) {
-                    // Task itself threw — treat as failed request
-                    log.warn("Task failed unexpectedly: {}",
-                            ex.getMessage());
-                    results.add(SingleRequestResult.builder()
-                            .statusCode(0)
-                            .latencyMs(0)
-                            .success(false)
-                            .errorMessage("Task error: "
-                                    + ex.getMessage())
-                            .build());
                 }
-            }
 
-            // Shut down the executor — no more tasks accepted
-            executor.shutdown();
+                // ── Step 4: Wait for ALL requests to complete ─
+                List<SingleRequestResult> results = new ArrayList<>();
+                for (Future<SingleRequestResult> future : futures) {
+                try {
+                        results.add(future.get());
+                } catch (Exception ex) {
+                        log.warn("Task failed unexpectedly: {}",
+                                ex.getMessage());
+                        results.add(SingleRequestResult.builder()
+                                .statusCode(0)
+                                .latencyMs(0)
+                                .success(false)
+                                .errorMessage("Task error: "
+                                        + ex.getMessage())
+                                .build());
+                }
+                }
 
-            log.info("All {} requests completed for test {}",
-                    results.size(), testRunId);
+                // Shut down the executor
+                executor.shutdown();
 
-            // ── Step 5: Save all TestResults to DB ────────
-            List<TestResult> testResults = new ArrayList<>();
-            for (SingleRequestResult result : results) {
+                log.info("All {} requests completed for test {}",
+                        results.size(), testRunId);
+
+                // ── Step 5: Save all TestResults to DB ────────
+                List<TestResult> testResults = new ArrayList<>();
+                for (SingleRequestResult result : results) {
                 int idx = indexCounter.incrementAndGet();
 
                 TestResult testResult = TestResult.builder()
@@ -255,44 +236,42 @@ public class LoadTestService {
                         .build();
 
                 testResults.add(testResult);
-            }
+                }
 
-            // saveAll() inserts all rows in one batch
-            // much faster than saving one by one
-            testResultRepository.saveAll(testResults);
+                testResultRepository.saveAll(testResults);
 
-            // ── Step 6: Calculate summary stats ───────────
-            LoadTestSummary summary = calculateSummary(
-                    results, testRun);
+                // ── Step 6: Calculate summary stats ───────────
+                LoadTestSummary summary = calculateSummary(
+                        results, testRun);
 
-            // ── Step 7: Update TestRun to COMPLETED ───────
-            testRun.setStatus(TestRun.TestRunStatus.COMPLETED);
-            testRun.setEndTime(OffsetDateTime.now());
-            testRunRepository.save(testRun);
+                // ── Step 7: Update TestRun to COMPLETED ───────
+                testRun.setStatus(TestRun.TestRunStatus.COMPLETED);
+                testRun.setEndTime(OffsetDateTime.now());
+                testRunRepository.save(testRun);
 
-            log.info("Test {} completed: {} requests, "
-                    + "{}% success, avg {}ms",
-                    testRunId,
-                    summary.getTotalSent(),
-                    String.format("%.1f", summary.getSuccessRatePercent()),
-                    summary.getAvgLatencyMs());
+                log.info("Test {} completed: {} requests, "
+                        + "{}% success, avg {}ms",
+                        testRunId,
+                        summary.getTotalSent(),
+                        String.format("%.1f", summary.getSuccessRatePercent()),
+                        summary.getAvgLatencyMs());
 
-            // ── Step 8: Build and return full result ───────
-            return buildTestRunResult(testRun, summary);
+                // ── Step 8: Return UUID only ───────────────────
+                return testRunId;
 
         } catch (Exception ex) {
-            // Something crashed before all requests completed
-            // Mark as FAILED so it doesn't stay stuck as RUNNING
-            log.error("Test {} failed unexpectedly: {}",
-                    testRunId, ex.getMessage());
+                // Something crashed before all requests completed
+                log.error("Test {} failed unexpectedly: {}",
+                        testRunId, ex.getMessage());
 
-            testRun.setStatus(TestRun.TestRunStatus.FAILED);
-            testRun.setEndTime(OffsetDateTime.now());
-            testRunRepository.save(testRun);
+                testRun.setStatus(TestRun.TestRunStatus.FAILED);
+                testRun.setEndTime(OffsetDateTime.now());
+                testRunRepository.save(testRun);
 
-            return buildTestRunResult(testRun, null);
+                // Return UUID even on failure
+                return testRunId;
         }
-    }
+        }
 
     // ─────────────────────────────────────────────────────
     // METHOD 2: getResult()
