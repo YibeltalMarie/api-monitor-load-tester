@@ -44,8 +44,8 @@ public class ApiMonitorApplication {
      * slow enough to resist brute force,
      * fast enough for normal use (~100ms per hash).
      */
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+    // @Bean
+    // public PasswordEncoder passwordEncoder() {
+    //     return new BCryptPasswordEncoder();
+    // }
 }
