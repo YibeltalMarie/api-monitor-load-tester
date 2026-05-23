@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/springsecurity6">
+
+<!-- ═══════════════════════════════════════════
+     HEAD FRAGMENT — used by every page
+     Usage: <head th:replace="~{base :: head('Page Title')}"></head>
+════════════════════════════════════════════════ -->
+<head th:fragment="head(title)">
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+    <!-- CSRF tokens for fetch() calls -->
+    <meta name="_csrf"        th:content="${_csrf.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
+
+    <title th:text="${title} + ' — LoadPulse'">LoadPulse</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Google Fonts: DM Sans + JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" th:href="@{/css/main.css}"/>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['DM Sans', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50:  '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            900: '#0c4a6e',
+                        },
+                        surface: {
+                            DEFAULT: '#0f172a',
+                            card:    '#1e293b',
+                            border:  '#334155',
+                            muted:   '#475569',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+
+<!-- ═══════════════════════════════════════════
+     NAVBAR FRAGMENT — used by every protected page
+     Usage: <nav th:replace="~{base :: navbar}"></nav>
+════════════════════════════════════════════════ -->
+<body>
+<nav th:fragment="navbar" class="sticky top-0 z-50 border-b border-surface-border bg-surface/80 backdrop-blur-md">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="flex h-16 items-center justify-between">
+
+            <!-- Logo -->
+            <div class="flex items-center gap-8">
+                <a th:href="@{/}" class="flex items-center gap-2 group">
+                    <div class="h-8 w-8 rounded-lg bg-brand-500 flex items-center justify-center shadow-lg shadow-brand-500/30 group-hover:shadow-brand-500/50 transition-shadow">
+                        <svg class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.5l4-4 4 4 4-8 4 4"/>
+                        </svg>
+                    </div>
+                    <span class="text-white font-semibold tracking-tight">Load<span class="text-brand-400">Pulse</span></span>
+                </a>
+
+                <!-- Nav links -->
+                <div class="hidden md:flex items-center gap-1">
+                    <a th:href="@{/}"
+                       class="nav-link px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                        Dashboard
+                    </a>
+                    <a th:href="@{/load-test/new}"
+                       class="nav-link px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                        Load Test
+                    </a>
+                    <a th:href="@{/load-test/history}"
+                       class="nav-link px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                        History
+                    </a>
+                    <a th:href="@{/monitor}"
+                       class="nav-link px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                        Monitor
+                    </a>
+                </div>
+            </div>
+
+            <!-- Right side: username + logout -->
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/5 border border-surface-border">
+                    <div class="h-5 w-5 rounded-full bg-brand-500/20 border border-brand-500/40 flex items-center justify-center">
+                        <svg class="h-3 w-3 text-brand-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 10a4 4 0 100-8 4 4 0 000 8zm-7 8a7 7 0 1114 0H3z"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm text-slate-300 font-medium" sec:authentication="name">username</span>
+                </div>
+
+                <form th:action="@{/auth/logout}" method="post">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                    <button type="submit"
+                            class="px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-red-400 hover:bg-red-400/10 border border-transparent hover:border-red-400/20 transition-all">
+                        Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>
+</body>
+</html>
+
+
+

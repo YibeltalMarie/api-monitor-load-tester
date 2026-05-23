@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{base :: head('New Load Test')}"></head>
+<body>
+
+<nav th:replace="~{base :: navbar}"></nav>
+
+<!--
+    This page sends data TO the API. It receives nothing from the Model.
+
+    JS file: load-test-config.js
+    JS reads: all form field values + CSRF meta tags from base.html
+    JS sends: POST /api/load-test/run
+    Contract request body:
+    {
+      "url":            string,
+      "method":         string  (GET | POST | PUT | DELETE),
+      "totalRequests":  int,
+      "concurrency":    int,
+      "timeoutSeconds": int,
+      "requestBody":    string | null,
+      "headers":        object  (key-value pairs, optional)
+    }
+    Contract response: { "testRunId": "uuid" }
+    After success: redirect to /load-test/{testRunId}/live
+-->
+
+<main class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
+
+    <!-- Header -->
+    <div class="mb-8 fade-up">
+        <a th:href="@{/}" class="inline-flex items-center gap-1.5 text-sm
+                                  text-slate-500 hover:text-slate-300 transition-colors mb-4">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Back to Dashboard
+        </a>
+        <h1 class="text-2xl font-semibold text-white">New Load Test</h1>
+        <p class="mt-1 text-sm text-slate-500">
+            Configure and fire a burst of HTTP requests at your target API.
+        </p>
+    </div>
+
+    <!-- Inline error box — shown by load-test-config.js on failure -->
+    <div id="error-box" class="hidden mb-6"></div>
+
+    <!-- Form card -->
+    <div class="card fade-up">
+
+        <!--
+            id="run-form" — load-test-config.js attaches submit listener here
+            No th:action — JS handles submission via fetch(), not a standard POST
+        -->
+        <form id="run-form" class="space-y-6">
+
+            <!-- Target URL -->
+            <div>
+                <label for="url"
+                       class="block text-sm font-medium text-slate-300 mb-1.5">
+                    Target URL <span class="text-red-400 ml-0.5">*</span>
+                </label>
+                <input type="url"
+                       id="url"
+                       class="form-input"
+                       placeholder="https://api.example.com/users"
+                       required/>
+            </div>
+
+            <!-- Method + Timeout -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="method"
+                           class="block text-sm font-medium text-slate-300 mb-1.5">
+                        HTTP Method
+                    </label>
+                    <!--
+                        id="method" — JS reads this as payload.method
+                        Values match contract: GET | POST | PUT | DELETE
+                    -->
+                    <select id="method" class="form-input">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="timeoutSeconds"
+                           class="block text-sm font-medium text-slate-300 mb-1.5">
+                        Timeout (seconds)
+                    </label>
+                    <!--
+                        id="timeoutSeconds" — JS reads this as payload.timeoutSeconds (int)
+                    -->
+                    <input type="number"
+                           id="timeoutSeconds"
+                           class="form-input"
+                           value="5"
+                           min="1"
+                           max="60"/>
+                </div>
+            </div>
+
+            <!-- Total Requests + Concurrency -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="totalRequests"
+                           class="block text-sm font-medium text-slate-300 mb-1.5">
+                        Number of Requests <span class="text-red-400 ml-0.5">*</span>
+                    </label>
+                    <!--
+                        id="totalRequests" — JS reads this as payload.totalRequests (int)
+                    -->
+                    <input type="number"
+                           id="totalRequests"
+                           class="form-input"
+                           placeholder="100"
+                           min="1"
+                           max="10000"
+                           required/>
+                    <p class="mt-1 text-xs text-slate-600">Total requests to fire</p>
+                </div>
+                <div>
+                    <label for="concurrency"
+                           class="block text-sm font-medium text-slate-300 mb-1.5">
+                        Concurrency <span class="text-red-400 ml-0.5">*</span>
+                    </label>
+                    <!--
+                        id="concurrency" — JS reads this as payload.concurrency (int)
+                    -->
+                    <input type="number"
+                           id="concurrency"
+                           class="form-input"
+                           placeholder="10"
+                           min="1"
+                           max="500"
+                           required/>
+                    <p class="mt-1 text-xs text-slate-600">Parallel threads</p>
+                </div>
+            </div>
+
+            <!-- Headers (optional) -->
+            <div>
+                <label for="headers"
+                       class="block text-sm font-medium text-slate-300 mb-1.5">
+                    Headers
+                    <span class="text-xs text-slate-600 font-normal ml-1">
+                        (optional — JSON format)
+                    </span>
+                </label>
+                <!--
+                    id="headers" — JS parses this as JSON → payload.headers (object)
+                    Contract: "headers": { "Authorization": "Bearer token123" }
+                    If empty → JS sends payload.headers = {}
+                -->
+                <textarea id="headers"
+                          class="form-input font-mono text-sm"
+                          rows="3"
+                          placeholder='{"Authorization": "Bearer your-token"}'></textarea>
+            </div>
+
+            <!-- Request body (optional, shown for POST and PUT only) -->
+            <!--
+                id="body-section" — load-test-config.js toggles hidden class
+                based on selected method value
+            -->
+            <div id="body-section" class="hidden">
+                <label for="requestBody"
+                       class="block text-sm font-medium text-slate-300 mb-1.5">
+                    Request Body
+                    <span class="text-xs text-slate-600 font-normal ml-1">
+                        (optional — JSON)
+                    </span>
+                </label>
+                <!--
+                    id="requestBody" — JS reads this as payload.requestBody (string | null)
+                    Contract: "requestBody": null when not provided
+                -->
+                <textarea id="requestBody"
+                          class="form-input font-mono text-sm"
+                          rows="4"
+                          placeholder='{"key": "value"}'></textarea>
+            </div>
+
+            <!-- Info strip -->
+            <div class="flex items-start gap-3 rounded-lg bg-brand-500/5
+                        border border-brand-500/15 px-4 py-3">
+                <svg class="h-4 w-4 text-brand-400 shrink-0 mt-0.5"
+                     fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd"
+                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"/>
+                </svg>
+                <p class="text-xs text-slate-500 leading-relaxed">
+                    The test fires all requests as fast as possible up to the concurrency limit.
+                    Results stream live on the next screen.
+                </p>
+            </div>
+
+            <!-- Submit button -->
+            <div class="flex items-center gap-4 pt-2">
+                <!--
+                    id="submit-btn"  — JS disables this during request
+                    id="btn-icon"    — JS hides this and shows spinner during request
+                    id="btn-spinner" — JS shows this during request
+                    id="btn-text"    — JS changes text: "Run Test" / "Starting..."
+                -->
+                <button type="submit" id="submit-btn" class="btn-primary flex items-center gap-2">
+                    <svg id="btn-icon" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                         stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.972l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z"/>
+                    </svg>
+                    <svg id="btn-spinner" class="hidden h-4 w-4 spinner" fill="none"
+                         viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                    </svg>
+                    <span id="btn-text">Run Test</span>
+                </button>
+                <p class="text-xs text-slate-600">
+                    You will be redirected to the live results screen
+                </p>
+            </div>
+
+        </form>
+    </div>
+
+</main>
+
+<!-- load-test-config.js handles all form logic -->
+<script src="/js/load-test-config.js"></script>
+
+</body>
+</html>
