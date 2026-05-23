@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Login — PulseCheck</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+
+    <style>
+        :root {
+            --bg:           #0a0b0f;
+            --surface:      #12141a;
+            --surface-2:    #1a1d26;
+            --border:       #252836;
+            --accent:       #5b6ef5;
+            --accent-glow:  rgba(91,110,245,0.18);
+            --success:      #2dd4a0;
+            --danger:       #f25a6e;
+            --text:         #e8eaf2;
+            --text-muted:   #7a7f9a;
+            --text-dim:     #4a4f6a;
+            --font-head:    'Syne', sans-serif;
+            --font-mono:    'DM Mono', monospace;
+            --radius:       10px;
+            --radius-lg:    16px;
+            --transition:   180ms cubic-bezier(.4,0,.2,1);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-mono);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Background grid */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(var(--border) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        /* Accent glow blob */
+        body::after {
+            content: '';
+            position: fixed;
+            width: 500px; height: 500px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(91,110,245,0.12) 0%, transparent 70%);
+            top: -100px; left: 50%;
+            transform: translateX(-50%);
+            pointer-events: none;
+        }
+
+        .auth-container {
+            width: 100%;
+            max-width: 400px;
+            position: relative;
+            z-index: 1;
+            animation: fadeUp 0.4s ease both;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .auth-brand {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .auth-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-family: var(--font-head);
+            font-weight: 800;
+            font-size: 1.4rem;
+            color: var(--text);
+            letter-spacing: -0.03em;
+            text-decoration: none;
+        }
+
+        .auth-logo::before {
+            content: '';
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 14px var(--accent);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%,100% { opacity:1; transform: scale(1); }
+            50%      { opacity:0.5; transform: scale(0.7); }
+        }
+
+        .auth-tagline {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-top: 0.4rem;
+            letter-spacing: 0.06em;
+        }
+
+        .auth-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+        }
+
+        .auth-title {
+            font-family: var(--font-head);
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 0.3rem;
+            letter-spacing: -0.02em;
+        }
+
+        .auth-subtitle {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-bottom: 1.75rem;
+        }
+
+        .alert {
+            padding: 0.7rem 0.9rem;
+            border-radius: var(--radius);
+            font-size: 0.8rem;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert-success {
+            background: rgba(45,212,160,0.1);
+            border: 1px solid rgba(45,212,160,0.3);
+            color: var(--success);
+        }
+
+        .alert-error {
+            background: rgba(242,90,110,0.1);
+            border: 1px solid rgba(242,90,110,0.3);
+            color: var(--danger);
+        }
+
+        .alert-info {
+            background: rgba(91,110,245,0.1);
+            border: 1px solid rgba(91,110,245,0.3);
+            color: var(--accent);
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            margin-bottom: 1.1rem;
+        }
+
+        .form-label {
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .form-control {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            padding: 0.65rem 0.9rem;
+            transition: border-color var(--transition), box-shadow var(--transition);
+            outline: none;
+            width: 100%;
+        }
+
+        .form-control:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .form-control::placeholder { color: var(--text-dim); }
+
+        .btn-submit {
+            width: 100%;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 0.75rem;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all var(--transition);
+            letter-spacing: 0.02em;
+            margin-top: 0.5rem;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .btn-submit:hover {
+            background: #6b7ef8;
+            box-shadow: 0 0 30px rgba(91,110,245,0.35);
+            transform: translateY(-1px);
+        }
+
+        .auth-footer {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        .auth-footer a {
+            color: var(--accent);
+            text-decoration: none;
+            transition: opacity var(--transition);
+        }
+
+        .auth-footer a:hover { opacity: 0.75; }
+    </style>
+</head>
+<body>
+
+<div class="auth-container">
+
+    <div class="auth-brand">
+        <a href="/" class="auth-logo">PulseCheck</a>
+        <p class="auth-tagline">HTTP Load Testing &amp; API Monitor</p>
+    </div>
+
+    <div class="auth-card">
+        <h1 class="auth-title">Welcome back</h1>
+        <p class="auth-subtitle">Sign in to your account to continue</p>
+
+        <!--
+            Spring Security redirects back to /auth/login?error on bad credentials
+            and to /auth/login?logout after logout
+        -->
+        <div class="alert alert-error" th:if="${param.error}">
+            ✕ Invalid username or password. Please try again.
+        </div>
+
+        <div class="alert alert-info" th:if="${param.logout}">
+            ✓ You have been logged out successfully.
+        </div>
+
+        <div class="alert alert-success" th:if="${param.registered}">
+            ✓ Account created! You can now sign in.
+        </div>
+
+        <!--
+            Spring Security handles POST /auth/login automatically.
+            Fields must be named "username" and "password".
+            Thymeleaf th:action injects CSRF token automatically.
+        -->
+        <form th:action="@{/auth/login}" method="post">
+            <div class="form-group">
+                <label for="username" class="form-label">Username</label>
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    class="form-control"
+                    placeholder="your_username"
+                    autocomplete="username"
+                    autofocus
+                    required/>
+            </div>
+
+            <div class="form-group">
+                <label for="password" class="form-label">Password</label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    class="form-control"
+                    placeholder="••••••••"
+                    autocomplete="current-password"
+                    required/>
+            </div>
+
+            <button type="submit" class="btn-submit">Sign In →</button>
+        </form>
+    </div>
+
+    <div class="auth-footer">
+        Don't have an account? <a href="/auth/signup">Sign up</a>
+    </div>
+
+</div>
+
+</body>
+</html>
