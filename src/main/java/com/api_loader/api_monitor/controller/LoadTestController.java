@@ -1,8 +1,9 @@
 package com.api_loader.api_monitor.controller;
 
-import com.api_loader.api_monitor.dto.LoadTestRequest;
-import com.api_loader.api_monitor.dto.TestRunResult;
-import com.api_loader.api_monitor.dto.TestRunSummary;
+import com.api_loader.api_monitor.dto.request.LoadTestRequest;
+import com.api_loader.api_monitor.dto.response.TestRunResult;
+import com.api_loader.api_monitor.dto.response.TestRunSummary;
+import com.api_loader.api_monitor.dto.response.LoadTestSummary;
 import com.api_loader.api_monitor.model.User;
 import com.api_loader.api_monitor.service.LoadTestService;
 import com.api_loader.api_monitor.service.UserService;
