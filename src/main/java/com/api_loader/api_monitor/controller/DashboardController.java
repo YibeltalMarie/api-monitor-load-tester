@@ -6,20 +6,36 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
+import com.api_loader.api_monitor.model.User;
+import com.api_loader.api_monitor.service.LoadTestService;
+import com.api_loader.api_monitor.service.UserService;
+
 import java.util.UUID;
+import java.util.List;
 
 @Controller
 public class DashboardController {
 
-    // ── Dashboard home
+    private final LoadTestService loadTestService;
+    private final UserService userService;
+
+    public DashboardController(LoadTestService loadTestService,
+                               UserService userService) {
+        this.loadTestService = loadTestService;
+        this.userService = userService;
+    }
+
+    private User getUser(Authentication authentication) {
+        return userService.findByUsername(authentication.getName());
+    }
+
     @GetMapping("/")
     public String dashboard(Authentication authentication, Model model) {
-        // Pass username to the template for the welcome message
-        // Navbar uses sec:authentication="name" so we only need this here
-        model.addAttribute("username", authentication.getName());
+        User user = getUser(authentication);
 
-        // Group 2: model.addAttribute("recentRuns", loadTestService.getHistory(user));
-        // Group 3: model.addAttribute("monitorSummary", monitorService.getEndpoints(user));
+        model.addAttribute("username", authentication.getName());
+        model.addAttribute("recentRuns", loadTestService.getHistory(user));
+        model.addAttribute("monitorSummary", List.of());
 
         return "dashboard";
     }

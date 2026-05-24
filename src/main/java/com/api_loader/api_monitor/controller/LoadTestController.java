@@ -3,7 +3,6 @@ package com.api_loader.api_monitor.controller;
 import com.api_loader.api_monitor.dto.request.LoadTestRequest;
 import com.api_loader.api_monitor.dto.response.TestRunResult;
 import com.api_loader.api_monitor.dto.response.TestRunSummary;
-import com.api_loader.api_monitor.dto.response.LoadTestSummary;
 import com.api_loader.api_monitor.model.User;
 import com.api_loader.api_monitor.service.LoadTestService;
 import com.api_loader.api_monitor.service.UserService;
@@ -67,7 +66,11 @@ public class LoadTestController {
     // ── Helper — get User entity from Spring Security Authentication 
     // Authentication gives us the username string.
     // We load the full User entity from UserService so we can pass it to Dev A.
+    // private User getUser(Authentication authentication) {
+    //     return (User) userService.loadUserByUsername(authentication.getName());
+    // }
+
     private User getUser(Authentication authentication) {
-        return (User) userService.loadUserByUsername(authentication.getName());
+        return userService.findByUsername(authentication.getName());
     }
 }
