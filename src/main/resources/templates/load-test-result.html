@@ -7,26 +7,32 @@
 
 <!--
     This page has NO Thymeleaf model data.
-    All data comes from TWO JS fetch calls:
+    All data comes from TWO separate JS files:
 
-    Fetch 1: GET /api/load-test/{id}
-    Contract response fields used:
-      result.id, result.url, result.method, result.totalRequests,
-      result.concurrency, result.status, result.startTime,
-      result.endTime, result.durationSeconds
-      result.summary.totalSent, result.summary.successCount,
-      result.summary.failureCount, result.summary.successRatePercent,
-      result.summary.avgLatencyMs, result.summary.minLatencyMs,
-      result.summary.maxLatencyMs, result.summary.p50LatencyMs,
-      result.summary.p95LatencyMs, result.summary.p99LatencyMs,
-      result.summary.requestsPerSecond
-      result.summary.errors[ {statusCode, count, reason} ]
+    load-test-result.js  (Group 1 — already built)
+        Fetches: GET /api/load-test/{id}
+        Fills:   stat cards, percentile bars, error table, export link, header
 
-    Fetch 2: GET /api/load-test/{id}/results  → Group 2 only (charts)
+    result-charts.js  (Group 2 — new)
+        Fetches: GET /api/load-test/{id}/results
+        Fills:   Chart.js bar chart only
 
-    JS file: load-test-result.js
-    JS reads testRunId from: window.location.pathname.split('/')[2]
-    URL pattern: /load-test/{id}/result
+    Both files read testRunId from window.location.pathname.split('/')[2]
+    Both files run independently — no dependency between them.
+
+    Contract field names used by load-test-result.js:
+        result.id, result.url, result.method, result.startTime,
+        result.durationSeconds, result.summary.totalSent,
+        result.summary.successCount, result.summary.failureCount,
+        result.summary.successRatePercent, result.summary.avgLatencyMs,
+        result.summary.minLatencyMs, result.summary.maxLatencyMs,
+        result.summary.p50LatencyMs, result.summary.p95LatencyMs,
+        result.summary.p99LatencyMs, result.summary.requestsPerSecond,
+        result.summary.errors[ {statusCode, count, reason} ]
+
+    Contract field names used by result-charts.js:
+        rawResult.index, rawResult.latencyMs,
+        rawResult.statusCode, rawResult.success
 -->
 
 <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
@@ -43,28 +49,33 @@
             Back to History
         </a>
 
-        <!-- Page header — JS fills these in -->
+        <!-- Header — filled by load-test-result.js -->
         <div class="flex items-start justify-between">
             <div>
                 <div class="flex items-center gap-3 mb-1">
                     <!--
-                        id="result-method" — JS sets textContent = data.method
-                        id="result-url"    — JS sets textContent = data.url
+                        id="result-method"
+                        load-test-result.js: el.textContent = data.method
                     -->
                     <span id="result-method" class="badge-info">—</span>
+                    <!--
+                        id="result-url"
+                        load-test-result.js: el.textContent = data.url
+                    -->
                     <span id="result-url" class="mono text-slate-300 text-sm"></span>
                 </div>
                 <h1 class="text-2xl font-semibold text-white">Test Results</h1>
                 <!--
-                    id="result-meta" — JS sets textContent = formatted startTime + duration
-                    e.g. "2026-05-17 10:30 · 12s duration"
+                    id="result-meta"
+                    load-test-result.js: formatted startTime + durationSeconds
                 -->
                 <p id="result-meta" class="mt-1 text-sm text-slate-500"></p>
             </div>
 
             <!--
-                id="export-link" — JS sets href = /api/load-test/{id}/export
-                Plain anchor, no JS fetch needed — browser handles file download
+                id="export-link"
+                load-test-result.js: sets href = /api/load-test/{id}/export
+                Plain anchor — browser handles file download, no JS fetch needed
             -->
             <a id="export-link"
                href="#"
@@ -81,17 +92,19 @@
         </div>
     </div>
 
-    <!-- Loading state — shown by default, hidden by JS when data arrives -->
+    <!-- Loading state — hidden by load-test-result.js when data arrives -->
     <div id="result-loading" class="flex items-center gap-3 text-slate-500 text-sm py-8">
         <svg class="h-4 w-4 spinner" fill="none" viewBox="0 0 24 24"
              stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992
+                     m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7
+                     M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
         </svg>
         Loading test results...
     </div>
 
-    <!-- Error state — shown by JS on fetch failure -->
+    <!-- Error state — shown by load-test-result.js on fetch failure -->
     <div id="result-error" class="hidden">
         <div class="card text-center py-12">
             <svg class="h-10 w-10 text-red-400 mx-auto mb-3" fill="none"
@@ -104,145 +117,126 @@
         </div>
     </div>
 
-    <!-- Main content — hidden until JS fills all values -->
-    <!--
-        id="result-content" — JS removes hidden class after all data is injected
-    -->
+    <!-- Main content — shown by load-test-result.js after data is loaded -->
     <div id="result-content" class="hidden">
 
-        <!-- 6 Stat cards -->
+        <!-- 6 Stat cards — filled by load-test-result.js -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-
             <div class="card fade-up fade-up-delay-1">
                 <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">Total Sent</p>
-                <!--
-                    id="stat-total-sent"
-                    JS: el.textContent = data.summary.totalSent
-                -->
                 <p id="stat-total-sent" class="stat-number text-white">—</p>
             </div>
-
             <div class="card fade-up fade-up-delay-1">
                 <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">Success</p>
-                <!--
-                    id="stat-success-count"
-                    JS: el.textContent = data.summary.successCount
-                -->
                 <p id="stat-success-count" class="stat-number text-green-400">—</p>
             </div>
-
             <div class="card fade-up fade-up-delay-2">
                 <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">Failures</p>
-                <!--
-                    id="stat-failure-count"
-                    JS: el.textContent = data.summary.failureCount
-                -->
                 <p id="stat-failure-count" class="stat-number text-red-400">—</p>
             </div>
-
             <div class="card fade-up fade-up-delay-2">
                 <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">Avg Latency</p>
-                <!--
-                    id="stat-avg-latency"
-                    JS: el.textContent = data.summary.avgLatencyMs + 'ms'
-                -->
                 <p id="stat-avg-latency" class="stat-number text-brand-400">—</p>
             </div>
-
             <div class="card fade-up fade-up-delay-3">
                 <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">Req / sec</p>
-                <!--
-                    id="stat-req-per-sec"
-                    JS: el.textContent = data.summary.requestsPerSecond
-                -->
                 <p id="stat-req-per-sec" class="stat-number text-white">—</p>
             </div>
-
             <div class="card fade-up fade-up-delay-3">
                 <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">Success Rate</p>
-                <!--
-                    id="stat-success-rate"
-                    JS: el.textContent = data.summary.successRatePercent + '%'
-                -->
                 <p id="stat-success-rate" class="stat-number text-green-400">—</p>
             </div>
-
         </div>
 
-        <!-- Percentile breakdown -->
+        <!-- ── Group 2 addition: Bar chart ──────────────────────── -->
+        <div class="card mb-6 fade-up">
+            <h2 class="text-base font-semibold text-white mb-1">
+                Response Time Distribution
+            </h2>
+            <p class="text-xs text-slate-500 mb-4">
+                How many requests fell into each latency bucket
+            </p>
+
+            <!-- Chart loading spinner — shown by result-charts.js -->
+            <!--
+                id="chart-loading"
+                result-charts.js: hides this when chart is ready
+            -->
+            <div id="chart-loading"
+                 class="flex items-center gap-2 text-xs text-slate-500 mb-3">
+                <svg class="h-3.5 w-3.5 spinner" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992
+                             m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7
+                             M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                </svg>
+                Loading chart data...
+            </div>
+
+            <!-- Chart error — shown by result-charts.js on fetch failure -->
+            <!--
+                id="chart-error"
+                id="chart-error-msg" — result-charts.js sets textContent
+            -->
+            <div id="chart-error" class="hidden mb-3">
+                <p class="text-xs text-red-400"
+                   id="chart-error-msg"></p>
+            </div>
+
+            <!--
+                id="latency-chart"
+                result-charts.js: initialises Chart.js bar chart on this canvas
+            -->
+            <div class="chart-container">
+                <canvas id="latency-chart"></canvas>
+            </div>
+        </div>
+        <!-- ── End Group 2 addition ──────────────────────────────── -->
+
+        <!-- Percentile breakdown — filled by load-test-result.js -->
         <div class="card mb-6 fade-up">
             <h2 class="text-base font-semibold text-white mb-5">Latency Percentiles</h2>
-
             <div class="space-y-4">
-
-                <!-- Each row: label | bar | value -->
-                <!-- JS sets the bar width and value text for each percentile -->
 
                 <div class="flex items-center gap-4">
                     <span class="text-sm text-slate-500 w-28 shrink-0">Min</span>
                     <div class="flex-1 h-1.5 rounded-full bg-surface-border overflow-hidden">
-                        <!--
-                            id="bar-min" — JS sets style.width as percentage of max
-                        -->
                         <div id="bar-min" class="h-full rounded-full bg-brand-500"
                              style="width:0%"></div>
                     </div>
-                    <!--
-                        id="val-min"
-                        JS: el.textContent = data.summary.minLatencyMs + 'ms'
-                    -->
-                    <span id="val-min" class="mono text-slate-300 w-20 text-right">—</span>
+                    <span id="val-min"
+                          class="mono text-slate-300 w-20 text-right">—</span>
                 </div>
 
                 <div class="flex items-center gap-4">
                     <span class="text-sm text-slate-500 w-28 shrink-0">p50 (median)</span>
                     <div class="flex-1 h-1.5 rounded-full bg-surface-border overflow-hidden">
-                        <!--
-                            id="bar-p50"
-                            JS: el.style.width = (p50 / max * 100) + '%'
-                        -->
                         <div id="bar-p50" class="h-full rounded-full bg-brand-500"
                              style="width:0%"></div>
                     </div>
-                    <!--
-                        id="val-p50"
-                        JS: el.textContent = data.summary.p50LatencyMs + 'ms'
-                    -->
-                    <span id="val-p50" class="mono text-slate-300 w-20 text-right">—</span>
+                    <span id="val-p50"
+                          class="mono text-slate-300 w-20 text-right">—</span>
                 </div>
 
                 <div class="flex items-center gap-4">
                     <span class="text-sm text-slate-500 w-28 shrink-0">p95</span>
                     <div class="flex-1 h-1.5 rounded-full bg-surface-border overflow-hidden">
-                        <!--
-                            id="bar-p95"
-                            JS: el.style.width = (p95 / max * 100) + '%'
-                        -->
                         <div id="bar-p95" class="h-full rounded-full bg-yellow-500"
                              style="width:0%"></div>
                     </div>
-                    <!--
-                        id="val-p95"
-                        JS: el.textContent = data.summary.p95LatencyMs + 'ms'
-                    -->
-                    <span id="val-p95" class="mono text-yellow-400 w-20 text-right">—</span>
+                    <span id="val-p95"
+                          class="mono text-yellow-400 w-20 text-right">—</span>
                 </div>
 
                 <div class="flex items-center gap-4">
                     <span class="text-sm text-slate-500 w-28 shrink-0">p99</span>
                     <div class="flex-1 h-1.5 rounded-full bg-surface-border overflow-hidden">
-                        <!--
-                            id="bar-p99"
-                            JS: el.style.width = (p99 / max * 100) + '%'
-                        -->
                         <div id="bar-p99" class="h-full rounded-full bg-red-500"
                              style="width:0%"></div>
                     </div>
-                    <!--
-                        id="val-p99"
-                        JS: el.textContent = data.summary.p99LatencyMs + 'ms'
-                    -->
-                    <span id="val-p99" class="mono text-red-400 w-20 text-right">—</span>
+                    <span id="val-p99"
+                          class="mono text-red-400 w-20 text-right">—</span>
                 </div>
 
                 <div class="flex items-center gap-4">
@@ -250,21 +244,14 @@
                     <div class="flex-1 h-1.5 rounded-full bg-surface-border overflow-hidden">
                         <div class="h-full rounded-full bg-red-500" style="width:100%"></div>
                     </div>
-                    <!--
-                        id="val-max"
-                        JS: el.textContent = data.summary.maxLatencyMs + 'ms'
-                    -->
-                    <span id="val-max" class="mono text-red-400 w-20 text-right">—</span>
+                    <span id="val-max"
+                          class="mono text-red-400 w-20 text-right">—</span>
                 </div>
 
             </div>
         </div>
 
-        <!-- Error breakdown table -->
-        <!--
-            id="errors-section" — JS shows this only when errors array is not empty
-            JS: document.getElementById('errors-section').classList.remove('hidden')
-        -->
+        <!-- Error breakdown table — filled by load-test-result.js -->
         <div id="errors-section" class="hidden card fade-up">
             <h2 class="text-base font-semibold text-white mb-4">Error Breakdown</h2>
             <table class="data-table">
@@ -275,11 +262,6 @@
                         <th>Reason</th>
                     </tr>
                 </thead>
-                <!--
-                    id="errors-body" — JS injects <tr> rows here
-                    Contract error shape: { statusCode, count, reason }
-                    reason can be null — JS shows "HTTP error" as fallback
-                -->
                 <tbody id="errors-body"></tbody>
             </table>
         </div>
@@ -288,8 +270,14 @@
 
 </main>
 
-<!-- load-test-result.js handles all data fetching and DOM updates -->
+<!--
+    load-test-result.js — fetches GET /api/load-test/{id}, fills stat cards
+    result-charts.js    — fetches GET /api/load-test/{id}/results, draws bar chart
+    Both run independently. Order of script tags does not matter.
+    Chart.js is already loaded in base.html head fragment.
+-->
 <script src="/js/load-test-result.js"></script>
+<script src="/js/result-charts.js"></script>
 
 </body>
 </html>
