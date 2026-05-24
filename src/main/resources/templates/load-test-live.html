@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{base :: head('Live Results')}"></head>
+<body>
+
+<nav th:replace="~{base :: navbar}"></nav>
+
+<!--
+    This page receives NO Thymeleaf model data.
+    All data comes from SSE stream via live-results.js
+
+    JS file: live-results.js
+    JS reads testRunId from: window.location.pathname.split('/')[2]
+    URL pattern: /load-test/{id}/live
+
+    SSE endpoint: GET /api/load-test/{id}/stream
+
+    Each SSE event (during test):
+      data: { index, latencyMs, statusCode, success, timestamp }
+
+    Final SSE event (when test completes):
+      event: done
+      data: { totalSent, successCount, failureCount, avgLatencyMs }
+
+    Decisions doc rule:
+      source.close() MUST be called after the done event
+-->
+
+<main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+
+    <!-- Header -->
+    <div class="mb-8 fade-up">
+        <a th:href="@{/load-test/history}"
+           class="inline-flex items-center gap-1.5 text-sm text-slate-500
+                  hover:text-slate-300 transition-colors mb-4">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Back to History
+        </a>
+        <div class="flex items-center gap-3">
+            <h1 class="text-2xl font-semibold text-white">Live Results</h1>
+            <!--
+                id="live-status-badge"
+                live-results.js: shows "Running" spinner while test runs
+                                 changes to "Completed" when done event fires
+            -->
+            <span id="live-status-badge"
+                  class="inline-flex items-center gap-1.5 badge-warning">
+                <svg id="live-spinner" class="h-3 w-3 spinner" fill="none"
+                     viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992
+                             m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7
+                             M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                </svg>
+                Running
+            </span>
+        </div>
+        <p class="mt-1 text-sm text-slate-500">
+            Results are streaming live as each request completes.
+        </p>
+    </div>
+
+    <!-- Error state — shown by live-results.js on SSE error -->
+    <!--
+        id="live-error" — live-results.js shows this on onerror
+        id="live-error-msg" — live-results.js sets textContent
+    -->
+    <div id="live-error" class="hidden mb-6">
+        <div class="flex items-center gap-3 rounded-lg bg-red-500/10
+                    border border-red-500/20 px-4 py-3">
+            <svg class="h-4 w-4 text-red-400 shrink-0" fill="currentColor"
+                 viewBox="0 0 20 20">
+                <path fill-rule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"/>
+            </svg>
+            <p id="live-error-msg" class="text-sm text-red-400"></p>
+        </div>
+    </div>
+
+    <!-- Live counters -->
+    <div class="grid grid-cols-3 gap-4 mb-6 fade-up">
+
+        <div class="card text-center">
+            <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                Requests Sent
+            </p>
+            <!--
+                id="counter-sent"
+                live-results.js: increments on every onmessage event
+            -->
+            <p id="counter-sent" class="stat-number text-white">0</p>
+        </div>
+
+        <div class="card text-center">
+            <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                Success
+            </p>
+            <!--
+                id="counter-success"
+                live-results.js: increments when event.success === true
+            -->
+            <p id="counter-success" class="stat-number text-green-400">0</p>
+        </div>
+
+        <div class="card text-center">
+            <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                Failures
+            </p>
+            <!--
+                id="counter-failures"
+                live-results.js: increments when event.success === false
+            -->
+            <p id="counter-failures" class="stat-number text-red-400">0</p>
+        </div>
+
+    </div>
+
+    <!-- Live Chart.js line chart -->
+    <div class="card mb-6 fade-up">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-base font-semibold text-white">Latency per Request</h2>
+            <p class="text-xs text-slate-500">ms — updates live</p>
+        </div>
+        <!--
+            id="live-chart"
+            live-results.js: initialises Chart.js line chart on this canvas
+            live-results.js: pushes new data point on every onmessage event
+        -->
+        <div class="chart-container">
+            <canvas id="live-chart"></canvas>
+        </div>
+    </div>
+
+    <!-- Final summary bar — hidden until done event fires -->
+    <!--
+        id="final-summary"
+        live-results.js: removes hidden class when done event fires
+        live-results.js: populates values from done event data:
+            { totalSent, successCount, failureCount, avgLatencyMs }
+    -->
+    <div id="final-summary" class="hidden card mb-6 fade-up">
+        <h2 class="text-base font-semibold text-white mb-4">Final Summary</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+            <div>
+                <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">
+                    Total Sent
+                </p>
+                <!--
+                    id="summary-total-sent"
+                    live-results.js: el.textContent = doneData.totalSent
+                -->
+                <p id="summary-total-sent" class="stat-number text-white">—</p>
+            </div>
+
+            <div>
+                <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">
+                    Success
+                </p>
+                <!--
+                    id="summary-success"
+                    live-results.js: el.textContent = doneData.successCount
+                -->
+                <p id="summary-success" class="stat-number text-green-400">—</p>
+            </div>
+
+            <div>
+                <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">
+                    Failures
+                </p>
+                <!--
+                    id="summary-failures"
+                    live-results.js: el.textContent = doneData.failureCount
+                -->
+                <p id="summary-failures" class="stat-number text-red-400">—</p>
+            </div>
+
+            <div>
+                <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">
+                    Avg Latency
+                </p>
+                <!--
+                    id="summary-avg-latency"
+                    live-results.js: el.textContent = doneData.avgLatencyMs + 'ms'
+                -->
+                <p id="summary-avg-latency" class="stat-number text-brand-400">—</p>
+            </div>
+
+        </div>
+
+        <!-- View full results button — enabled only after done event -->
+        <!--
+            id="view-results-btn"
+            live-results.js: sets href = /load-test/{id}/result
+            live-results.js: removes hidden class after done event
+        -->
+        <div class="mt-6 pt-5 border-t border-surface-border">
+            <a id="view-results-btn"
+               href="#"
+               class="btn-primary inline-flex items-center gap-2">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M3 13.5l4-4 4 4 4-8 4 4"/>
+                </svg>
+                View Full Results
+            </a>
+            <p class="mt-2 text-xs text-slate-600">
+                Full percentile breakdown and charts are available on the results page.
+            </p>
+        </div>
+    </div>
+
+</main>
+
+<!-- Chart.js already loaded in base.html head fragment -->
+<!-- live-results.js handles SSE stream and live chart updates -->
+<script src="/js/live-results.js"></script>
+
+</body>
+</html>
