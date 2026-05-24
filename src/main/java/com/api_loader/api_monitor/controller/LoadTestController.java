@@ -4,7 +4,6 @@ import com.api_loader.api_monitor.dto.request.LoadTestRequest;
 // import com.api_loader.api_monitor.dto.response.TestRequestResult;
 import com.api_loader.api_monitor.dto.response.TestRunResult;
 import com.api_loader.api_monitor.dto.response.TestRunSummary;
-
 import com.api_loader.api_monitor.model.TestResult;
 import com.api_loader.api_monitor.model.TestRun;
 import com.api_loader.api_monitor.model.User;
@@ -49,7 +48,9 @@ public class LoadTestController {
         return ResponseEntity.ok(Map.of("testRunId", testRun.getId()));
     }
 
-    // ── Get full result of one test ─────────────────────────────────────────
+
+
+    // ── Get full result of one test 
     @GetMapping("/{id}")
     public ResponseEntity<TestRunResult> getResult(
             @PathVariable UUID id,

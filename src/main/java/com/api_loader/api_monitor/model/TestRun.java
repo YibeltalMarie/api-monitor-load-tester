@@ -65,4 +65,12 @@ public class TestRun {
     public enum TestRunStatus {
         RUNNING, COMPLETED, FAILED
     }
+
+    // Add these two fields to TestRun.java
+
+    @Column(name = "request_body", columnDefinition = "TEXT")
+    private String requestBody;   // nullable — null for GET/DELETE
+
+    @Column(name = "headers", columnDefinition = "TEXT")
+    private String headers;       // nullable — stored as JSON string e.g. {"Authorization":"Bearer abc"}
 }
