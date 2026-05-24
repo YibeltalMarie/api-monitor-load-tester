@@ -3,6 +3,8 @@ package com.api_loader.api_monitor.controller;
 import com.api_loader.api_monitor.dto.request.LoadTestRequest;
 import com.api_loader.api_monitor.dto.response.TestRunResult;
 import com.api_loader.api_monitor.dto.response.TestRunSummary;
+import com.api_loader.api_monitor.model.TestResult;
+import com.api_loader.api_monitor.model.TestRun;
 import com.api_loader.api_monitor.model.User;
 import com.api_loader.api_monitor.service.LoadTestService;
 import com.api_loader.api_monitor.service.UserService;
@@ -10,6 +12,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
@@ -41,6 +44,8 @@ public class LoadTestController {
         // Dev C reads this and navigates to /load-test/{id}/live
         return ResponseEntity.ok(Map.of("testRunId", testRunId));
     }
+
+
 
     // ── Get full result of one test 
     @GetMapping("/{id}")

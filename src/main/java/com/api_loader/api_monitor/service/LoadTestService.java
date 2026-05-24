@@ -71,21 +71,21 @@ public class LoadTestService {
     private final ObjectMapper objectMapper;
 
 
-        /**
-         * Reconstructs a LoadTestRequest from a saved TestRun entity.
-         *
-         * WHY THIS EXISTS:
-         *   When GET /{id}/stream arrives, we only have the testRunId.
-         *   We load the TestRun from DB and rebuild the original request
-         *   so startTest() has everything it needs to fire the HTTP requests.
-         *
-         * WHY headers need Jackson deserialization:
-         *   Headers were stored as a JSON string in the DB column
-         *   (e.g. '{"Authorization":"Bearer abc123"}').
-         *   We convert it back to Map<String, String> here.
-         *   If deserialization fails we log a warning and proceed
-         *   with null headers — better than crashing the whole stream.
-         */
+/**
+ * Reconstructs a LoadTestRequest from a saved TestRun entity.
+ *
+ * WHY THIS EXISTS:
+ *   When GET /{id}/stream arrives, we only have the testRunId.
+ *   We load the TestRun from DB and rebuild the original request
+ *   so startTest() has everything it needs to fire the HTTP requests.
+ *
+ * WHY headers need Jackson deserialization:
+ *   Headers were stored as a JSON string in the DB column
+ *   (e.g. '{"Authorization":"Bearer abc123"}').
+ *   We convert it back to Map<String, String> here.
+ *   If deserialization fails we log a warning and proceed
+ *   with null headers — better than crashing the whole stream.
+ */
     public LoadTestRequest buildRequestFromTestRun(TestRun testRun) {
 
         Map<String, String> headers = null;
@@ -161,7 +161,7 @@ public class LoadTestService {
      *   test_run, and closes the connection. Takes ~5ms.
      */
      @Transactional
-     protected TestRun saveNewTestRun(LoadTestRequest request, User user) {
+     public TestRun saveNewTestRun(LoadTestRequest request, User user) {
 
         String headersJson = null;
         if (request.getHeaders() != null) {
