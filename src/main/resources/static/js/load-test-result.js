@@ -99,7 +99,6 @@ async function loadResult() {
         const response = await fetch(`/api/load-test/${testRunId}`);
 
         if (!response.ok) {
-            // Contract error shape: { status, error, message, timestamp }
             const err = await response.json();
             showError(err.message || 'Failed to load test results.');
             return;
@@ -107,12 +106,16 @@ async function loadResult() {
 
         const data = await response.json();
 
-        populateHeader(data);
-        populateStatCards(data.summary);
-        populatePercentiles(data.summary);
-        populateErrors(data.summary.errors);
-
-        showContent();
+        try {
+            populateHeader(data);
+            populateStatCards(data.summary);
+            populatePercentiles(data.summary);
+            populateErrors(data.summary.errors);
+            showContent();
+        } catch (renderErr) {
+            console.error('Render error:', renderErr);
+            showError('Data loaded but could not render results: ' + renderErr.message);
+        }
 
     } catch (err) {
         showError('Could not connect to the server. Please check it is running.');

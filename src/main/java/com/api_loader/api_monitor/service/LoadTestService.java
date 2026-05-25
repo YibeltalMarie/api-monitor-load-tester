@@ -634,12 +634,31 @@ public class LoadTestService {
                         .build())
                 .collect(Collectors.toList());
 
+        // in getResult()
         LoadTestSummary summary = results.isEmpty()
-                ? null
+                ? emptyLoadTestSummary()      // return zeroed summary, never null
                 : calculateSummary(results, testRun);
 
         return buildTestRunResult(testRun, summary);
     }
+
+    private LoadTestSummary emptyLoadTestSummary() {
+        return LoadTestSummary.builder()
+                .totalSent(0)
+                .successCount(0)
+                .failureCount(0)
+                .successRatePercent(0.0)
+                .avgLatencyMs(0)
+                .minLatencyMs(0)
+                .maxLatencyMs(0)
+                .p50LatencyMs(0)
+                .p95LatencyMs(0)
+                .p99LatencyMs(0)
+                .requestsPerSecond(0.0)
+                .errors(List.of())
+                .build();
+    }
+
 
     @Transactional(readOnly = true)
     public List<TestRunSummary> getHistory(User user) {

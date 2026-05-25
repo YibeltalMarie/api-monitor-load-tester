@@ -22,6 +22,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/load-test")
@@ -76,13 +77,27 @@ public class LoadTestController {
     // Dev C feeds this into Chart.js for the scatter/line chart on
     // load-test-result.html — one point per request.
     @GetMapping("/{id}/results")
-    public ResponseEntity<List<TestResult>> getRawResults(
+    public ResponseEntity<List<Map<String, Object>>> getRawResults(
             @PathVariable UUID id,
             Authentication authentication) {
 
         User user = getUser(authentication);
         List<TestResult> results = loadTestService.getRawResults(id, user);
-        return ResponseEntity.ok(results);
+
+        // Map to plain objects — no JPA relations, no lazy loading issues
+        List<Map<String, Object>> response = results.stream()
+                .map(r -> {
+                    Map<String, Object> item = new java.util.LinkedHashMap<>();
+                    item.put("index",      r.getIndex());
+                    item.put("latencyMs",  r.getLatencyMs());
+                    item.put("statusCode", r.getStatusCode());
+                    item.put("success",    r.isSuccess());
+                    item.put("errorMsg",   r.getErrorMsg());
+                    return item;
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(response);
     }
 
     // ── Live results SSE stream ─────────────────────────────────────────────
