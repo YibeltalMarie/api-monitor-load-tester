@@ -28,7 +28,7 @@
 // ── Read testRunId from URL ──────────────────────────────────────────
 // URL pattern: /load-test/{id}/result
 // pathname.split('/') → ['', 'load-test', 'a1b2c3d4', 'result']
-const testRunId = window.location.pathname.split('/')[2];
+const chartTestRunId = window.location.pathname.split('/')[2];
 
 // ── DOM element references ──────────────────────────────────────────
 // These ids must exist in the updated load-test-result.html
@@ -47,7 +47,7 @@ async function loadChart() {
     showChartLoading(true);
 
     try {
-        const response = await fetch(`/api/load-test/${testRunId}/results`);
+        const response = await fetch(`/api/load-test/${chartTestRunId}/results`);
 
         if (!response.ok) {
             // Contract error shape: { status, error, message, timestamp }

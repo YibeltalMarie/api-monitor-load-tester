@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{base :: head('Monitor Detail')}"></head>
+<body>
+
+<nav th:replace="~{base :: navbar}"></nav>
+
+<!--
+    This page has NO Thymeleaf model data.
+    All data comes from JS fetching real API endpoint.
+
+    JS file: monitor-detail.js
+
+    API consumed:
+      GET /api/monitor/{id}/results?hours=24
+
+    Query param hours: 24 (default) | 168 (7 days) | 720 (30 days)
+
+    Contract response shape:
+    {
+      endpointId:    1,
+      url:           "https://api.example.com/health",
+      totalChecks:   1440,
+      upCount:       1430,
+      downCount:     10,
+      uptimePercent: 99.3,
+      avgLatencyMs:  91,
+      results: [
+        {
+          checkedAt:  "2026-05-17T10:29:00",
+          isUp:       true,
+          statusCode: 200,
+          latencyMs:  88            ← can be null when isUp is false
+        }
+      ]
+    }
+
+    monitor-detail.js reads endpointId from URL:
+    window.location.pathname.split('/')[2]
+    URL pattern: /monitor/{id}
+-->
+
+<main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+
+    <!-- Back link -->
+    <div class="mb-8 fade-up">
+        <a th:href="@{/monitor}"
+           class="inline-flex items-center gap-1.5 text-sm text-slate-500
+                  hover:text-slate-300 transition-colors mb-4">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M15 19l-7-7 7-7"/>
+            </svg>
+            Back to Monitor
+        </a>
+
+        <!-- Header — filled by monitor-detail.js -->
+        <div>
+            <!--
+                id="detail-url"
+                monitor-detail.js: el.textContent = data.url
+            -->
+            <p id="detail-url"
+               class="mono text-slate-300 text-sm mb-1"></p>
+            <h1 class="text-2xl font-semibold text-white">Endpoint History</h1>
+        </div>
+    </div>
+
+    <!-- Loading state -->
+    <!--
+        id="detail-loading"
+        monitor-detail.js: hides when data arrives
+    -->
+    <div id="detail-loading"
+         class="flex items-center gap-3 text-slate-500 text-sm py-8">
+        <svg class="h-4 w-4 spinner" fill="none" viewBox="0 0 24 24"
+             stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+        </svg>
+        Loading endpoint history...
+    </div>
+
+    <!-- Error state -->
+    <!--
+        id="detail-error"
+        id="detail-error-msg"
+        monitor-detail.js: shows on fetch failure
+    -->
+    <div id="detail-error" class="hidden">
+        <div class="card text-center py-12">
+            <svg class="h-10 w-10 text-red-400 mx-auto mb-3" fill="none"
+                 viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+            </svg>
+            <p class="text-slate-400 text-sm mb-1">
+                Could not load endpoint history.
+            </p>
+            <p id="detail-error-msg" class="text-slate-600 text-xs"></p>
+        </div>
+    </div>
+
+    <!-- Main content — shown by monitor-detail.js after data loads -->
+    <!--
+        id="detail-content"
+        monitor-detail.js: removes hidden class after populating all values
+    -->
+    <div id="detail-content" class="hidden">
+
+        <!-- Stat cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+
+            <div class="card fade-up fade-up-delay-1">
+                <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                    Uptime
+                </p>
+                <!--
+                    id="stat-uptime"
+                    monitor-detail.js: el.textContent = data.uptimePercent + '%'
+                -->
+                <p id="stat-uptime" class="stat-number text-green-400">—</p>
+            </div>
+
+            <div class="card fade-up fade-up-delay-2">
+                <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                    Total Checks
+                </p>
+                <!--
+                    id="stat-total-checks"
+                    monitor-detail.js: el.textContent = data.totalChecks
+                -->
+                <p id="stat-total-checks" class="stat-number text-white">—</p>
+            </div>
+
+            <div class="card fade-up fade-up-delay-3">
+                <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                    Avg Latency
+                </p>
+                <!--
+                    id="stat-avg-latency"
+                    monitor-detail.js: el.textContent = data.avgLatencyMs + 'ms'
+                -->
+                <p id="stat-avg-latency" class="stat-number text-brand-400">—</p>
+            </div>
+
+            <div class="card fade-up fade-up-delay-4">
+                <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                    Down Count
+                </p>
+                <!--
+                    id="stat-down-count"
+                    monitor-detail.js: el.textContent = data.downCount
+                -->
+                <p id="stat-down-count" class="stat-number text-red-400">—</p>
+            </div>
+
+        </div>
+
+        <!-- Time window selector -->
+        <div class="flex items-center gap-2 mb-4">
+            <span class="text-sm text-slate-500">Time window:</span>
+            <!--
+                Time window buttons — monitor-detail.js attaches click listeners
+                On click: re-fetches with ?hours=X and redraws chart + stats
+
+                id="btn-24h"   → hours=24
+                id="btn-7d"    → hours=168
+                id="btn-30d"   → hours=720
+
+                monitor-detail.js adds active styling to selected button
+            -->
+            <button id="btn-24h"
+                    class="px-3 py-1.5 rounded-md text-xs font-medium
+                           bg-brand-500 text-white transition-all">
+                24h
+            </button>
+            <button id="btn-7d"
+                    class="px-3 py-1.5 rounded-md text-xs font-medium
+                           text-slate-400 hover:text-white hover:bg-white/5
+                           border border-surface-border transition-all">
+                7 days
+            </button>
+            <button id="btn-30d"
+                    class="px-3 py-1.5 rounded-md text-xs font-medium
+                           text-slate-400 hover:text-white hover:bg-white/5
+                           border border-surface-border transition-all">
+                30 days
+            </button>
+        </div>
+
+        <!-- Latency trend line chart -->
+        <div class="card mb-6 fade-up">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-base font-semibold text-white">
+                    Latency Trend
+                </h2>
+                <div class="flex items-center gap-3 text-xs text-slate-500">
+                    <span class="flex items-center gap-1.5">
+                        <span class="h-2 w-2 rounded-full bg-brand-500"></span>
+                        Up
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="h-2 w-2 rounded-full bg-red-500"></span>
+                        Down
+                    </span>
+                </div>
+            </div>
+
+            <!-- Chart loading -->
+            <!--
+                id="chart-loading"
+                monitor-detail.js: hides when chart is drawn
+            -->
+            <div id="chart-loading"
+                 class="flex items-center gap-2 text-xs text-slate-500 mb-3">
+                <svg class="h-3.5 w-3.5 spinner" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                </svg>
+                Loading chart...
+            </div>
+
+            <!--
+                id="latency-trend-chart"
+                monitor-detail.js: initialises and redraws Chart.js line chart
+                x axis: checkedAt timestamps
+                y axis: latencyMs (null shown as 0 when isUp is false)
+                points where isUp=false are colored red
+            -->
+            <div class="chart-container">
+                <canvas id="latency-trend-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Up/Down breakdown -->
+        <div class="card fade-up">
+            <h2 class="text-base font-semibold text-white mb-4">
+                Check Breakdown
+            </h2>
+            <div class="flex items-center gap-6">
+
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-full bg-green-500/10
+                                border border-green-500/20 flex items-center
+                                justify-center">
+                        <svg class="h-5 w-5 text-green-400" fill="currentColor"
+                             viewBox="0 0 20 20">
+                            <path fill-rule="evenodd"
+                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 mb-0.5">Up checks</p>
+                        <!--
+                            id="breakdown-up"
+                            monitor-detail.js: el.textContent = data.upCount
+                        -->
+                        <p id="breakdown-up"
+                           class="text-lg font-semibold text-green-400">—</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-full bg-red-500/10
+                                border border-red-500/20 flex items-center
+                                justify-center">
+                        <svg class="h-5 w-5 text-red-400" fill="currentColor"
+                             viewBox="0 0 20 20">
+                            <path fill-rule="evenodd"
+                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 mb-0.5">Down checks</p>
+                        <!--
+                            id="breakdown-down"
+                            monitor-detail.js: el.textContent = data.downCount
+                        -->
+                        <p id="breakdown-down"
+                           class="text-lg font-semibold text-red-400">—</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div><!-- end detail-content -->
+
+</main>
+
+<!-- Chart.js already loaded in base.html head fragment -->
+<script src="/js/monitor-detail.js"></script>
+
+</body>
+</html>
