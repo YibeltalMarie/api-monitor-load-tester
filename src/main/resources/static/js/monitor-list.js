@@ -197,9 +197,10 @@ function buildRow(ep) {
 /**
  * Handles add form submit.
  * POSTs to /api/monitor with JSON body.
- * On 201 → appends new row to table, no page reload.
+ * On 201 → redirects to /monitor/{id} (the detail page).
  * Contract request body: { url, method, intervalSeconds,
  *                          expectedStatusCode, enabled }
+ * Contract 201 response contains: id (used to build redirect URL)
  */
 async function handleAddSubmit(e) {
     e.preventDefault();
@@ -228,22 +229,11 @@ async function handleAddSubmit(e) {
             return;
         }
 
-        // Contract: 201 response is same shape as GET /api/monitor item
+        // Contract: 201 response contains id of newly created endpoint
         const newEndpoint = await response.json();
 
-        // Reset form
-        addForm.reset();
-        addEnabledEl.checked = true;
-
-        // If table was hidden (empty state), switch to table view
-        if (tableWrapperEl.classList.contains('hidden')) {
-            emptyEl.classList.add('hidden');
-            tableWrapperEl.classList.remove('hidden');
-        }
-
-        // Append new row to table
-        const row = buildRow(newEndpoint);
-        monitorBodyEl.appendChild(row);
+        // Redirect to the detail page of the newly created endpoint
+        window.location.href = `/monitor/${newEndpoint.id}`;
 
     } catch (err) {
         showAddError('Could not connect to the server.');
