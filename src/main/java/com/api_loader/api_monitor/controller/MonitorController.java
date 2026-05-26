@@ -58,17 +58,31 @@ public class MonitorController {
     // Adds a new monitored endpoint.
     // @Valid triggers AddEndpointRequest validation — 400 if invalid.
     // Returns 201 Created with the new endpoint's ID.
+
     @PostMapping
-    public ResponseEntity<Map<String, Long>> addEndpoint(
+    public ResponseEntity<EndpointStatusResponse> addEndpoint(
             @Valid @RequestBody AddEndpointRequest request,
             Authentication authentication) {
 
         User user = getUser(authentication);
         MonitoredEndpoint saved = monitorService.addEndpoint(request, user);
-        return ResponseEntity.status(201)
-                .body(Map.of("endpointId", saved.getId()));
-    }
 
+        return ResponseEntity.status(201).body(
+            EndpointStatusResponse.builder()
+                .id(saved.getId())
+                .url(saved.getUrl())
+                .method(saved.getMethod())
+                .intervalSeconds(saved.getIntervalSeconds())
+                .expectedStatusCode(saved.getExpectedStatusCode())
+                .enabled(saved.isEnabled())
+                .up(null)
+                .lastCheckedAt(null)
+                .lastLatencyMs(null)
+                .lastStatusCode(null)
+                .lastErrorMsg(null)
+                .build()
+        );
+    }
     // ── DELETE /api/monitor/{id} ────────────────────────────────────────────
     // Deletes an endpoint and all its MonitorResult history.
     // 404 if not found. 403 if it belongs to another user.

@@ -149,7 +149,9 @@ function populateHeader(data) {
  * @param {object} data
  */
 function populateStats(data) {
-    statUptimeEl.textContent  = data.uptimePercent.toFixed(1) + '%';
+    statUptimeEl.textContent = data.uptimePercent != null
+    ? data.uptimePercent.toFixed(1) + '%'
+    : '—';
     statChecksEl.textContent  = data.totalChecks;
     statLatencyEl.textContent = data.avgLatencyMs != null
         ? data.avgLatencyMs + 'ms'

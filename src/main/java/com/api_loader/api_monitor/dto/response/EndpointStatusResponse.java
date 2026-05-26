@@ -45,4 +45,7 @@ public class EndpointStatusResponse {
     private Long lastLatencyMs;
     private Integer lastStatusCode;
     private String lastErrorMsg;
+    // In EndpointStatusResponse add:
+    private String currentStatus;      // "UP" | "DOWN" | "UNKNOWN"
+    private Double uptimePercent24h;   // calculated from last 24h results
 }
