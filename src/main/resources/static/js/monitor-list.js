@@ -1,39 +1,27 @@
 /**
  * monitor-list.js
  *
- * Handles the monitor list page on monitor-list.html
+ * Handles the monitor page on monitor-list.html
+ *
+ * This page shows ONLY the add endpoint form.
+ * The endpoints list lives on load-test-history.html (Monitored APIs tab).
  *
  * Responsibilities:
- *   1. Fetch GET /api/monitor → render all endpoint rows
- *   2. Handle add form submit → POST /api/monitor → append new row
- *   3. Handle toggle switch   → PATCH /api/monitor/{id}/toggle → update row
- *   4. Handle delete button   → DELETE /api/monitor/{id} → remove row
- *
- * Contract: GET /api/monitor
- * Response array fields used:
- *   id, url, method, intervalSeconds, expectedStatusCode,
- *   enabled, currentStatus, lastCheckedAt, lastLatencyMs, uptimePercent24h
- *   currentStatus values: "UP" | "DOWN" | "UNKNOWN"
- *   lastLatencyMs: can be null (never checked yet)
+ *   1. Show/hide request body and content-type fields based on method
+ *   2. Handle form submit → POST /api/monitor → redirect to /monitor/{id}
  *
  * Contract: POST /api/monitor
  * Request body: { url, method, intervalSeconds, expectedStatusCode, enabled }
- * Response 201: same shape as one item above
+ * Response 201: { id, url, method, ... } — id used for redirect
  *
- * Contract: PATCH /api/monitor/{id}/toggle
- * Response 200: { id, enabled }
+ * PATCH /api/monitor/{id}/toggle and DELETE /api/monitor/{id}
+ * are handled on monitor-detail.html — not this page.
  *
- * Contract: DELETE /api/monitor/{id}
- * Response 204: no body
- *
- * Error handling (Decision 4):
- *   Never silent. Always show message to user.
- *   4xx → inline error near the action that caused it
- *
- * CSRF: all POST, PATCH, DELETE read token from base.html meta tags
+ * Error handling (Decision 4): never silent
+ * CSRF: POST reads token from base.html meta tags
  */
 
-// ── CSRF helpers ────────────────────────────────────────────────────
+// ── CSRF helpers ─────────────────────────────────────────────────────
 function getCsrfToken() {
     return document.querySelector('meta[name="_csrf"]')?.content;
 }
@@ -41,166 +29,53 @@ function getCsrfHeader() {
     return document.querySelector('meta[name="_csrf_header"]')?.content;
 }
 
-/**
- * Builds fetch headers with CSRF for mutating requests.
- * @param {boolean} hasBody - true for POST, false for PATCH/DELETE with no body
- * @returns {object}
- */
-function authHeaders(hasBody = false) {
-    const headers = {};
+function authHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
     const token  = getCsrfToken();
     const header = getCsrfHeader();
     if (token && header) headers[header] = token;
-    if (hasBody) headers['Content-Type'] = 'application/json';
     return headers;
 }
 
-// ── DOM element references ──────────────────────────────────────────
-const loadingEl      = document.getElementById('monitor-loading');
-const errorEl        = document.getElementById('monitor-error');
-const errorMsgEl     = document.getElementById('monitor-error-msg');
-const emptyEl        = document.getElementById('monitor-empty');
-const tableWrapperEl = document.getElementById('monitor-table-wrapper');
-const monitorBodyEl  = document.getElementById('monitor-body');
+// ── DOM element references ────────────────────────────────────────────
+const addForm       = document.getElementById('add-form');
+const addUrlEl      = document.getElementById('add-url');
+const addMethodEl   = document.getElementById('add-method');
+const addStatusEl   = document.getElementById('add-expected-status');
+const addIntervalEl = document.getElementById('add-interval');
+const addEnabledEl  = document.getElementById('add-enabled');
+const addSubmitBtn  = document.getElementById('add-submit-btn');
+const addBtnIcon    = document.getElementById('add-btn-icon');
+const addBtnSpinner = document.getElementById('add-btn-spinner');
+const addBtnText    = document.getElementById('add-btn-text');
+const addErrorBox   = document.getElementById('add-error-box');
+const bodySection   = document.getElementById('body-section');
+const bodyInput     = document.getElementById('add-request-body');
+const contentTypeEl = document.getElementById('add-content-type');
 
-// Add form elements
-const addForm        = document.getElementById('add-form');
-const addUrlEl       = document.getElementById('add-url');
-const addMethodEl    = document.getElementById('add-method');
-const addStatusEl    = document.getElementById('add-expected-status');
-const addIntervalEl  = document.getElementById('add-interval');
-const addEnabledEl   = document.getElementById('add-enabled');
-const addSubmitBtn   = document.getElementById('add-submit-btn');
-const addBtnIcon     = document.getElementById('add-btn-icon');
-const addBtnSpinner  = document.getElementById('add-btn-spinner');
-const addBtnText     = document.getElementById('add-btn-text');
-const addErrorBox    = document.getElementById('add-error-box');
-
-// ── Entry point ─────────────────────────────────────────────────────
-loadEndpoints();
-addForm.addEventListener('submit', handleAddSubmit);
-
-// ── Load all endpoints ──────────────────────────────────────────────
-
-/**
- * Fetches GET /api/monitor and renders the endpoint list.
- * Contract: always returns [] not null when no endpoints exist.
- */
-async function loadEndpoints() {
-    showState('loading');
-
-    try {
-        const response = await fetch('/api/monitor');
-
-        if (!response.ok) {
-            const err = await response.json();
-            showState('error', err.message || 'Failed to load endpoints.');
-            return;
-        }
-
-        // Contract: array, never null
-        const endpoints = await response.json();
-
-        if (endpoints.length === 0) {
-            showState('empty');
-            return;
-        }
-
-        monitorBodyEl.innerHTML = '';
-        endpoints.forEach(ep => {
-            const row = buildRow(ep);
-            monitorBodyEl.appendChild(row);
-        });
-
-        showState('table');
-
-    } catch (err) {
-        showState('error', 'Could not connect to the server.');
-        console.error('Monitor load error:', err);
+// ── Show/hide body fields based on method ─────────────────────────────
+// GET and DELETE → no body needed
+// POST and PUT   → show body textarea and content-type field
+addMethodEl.addEventListener('change', function () {
+    if (this.value === 'POST' || this.value === 'PUT') {
+        bodySection.classList.remove('hidden');
+    } else {
+        bodySection.classList.add('hidden');
+        if (bodyInput)     bodyInput.value = '';
+        if (contentTypeEl) contentTypeEl.value = 'application/json';
     }
-}
+});
 
-// ── Build one table row ─────────────────────────────────────────────
-
-/**
- * Creates a <tr> element from one endpoint object.
- * Uses exact field names from the contract:
- *   id, url, method, intervalSeconds, uptimePercent24h,
- *   lastLatencyMs, lastCheckedAt, currentStatus, enabled
- * @param {object} ep - one MonitoredEndpointStatus from contract
- * @returns {HTMLElement}
- */
-function buildRow(ep) {
-    const tr = document.createElement('tr');
-    tr.setAttribute('data-id', ep.id);
-
-    tr.innerHTML = `
-        <td>
-            <a href="/monitor/${ep.id}"
-               class="mono text-brand-400 hover:text-brand-300
-                      transition-colors text-sm">
-                ${escapeHtml(ep.url)}
-            </a>
-            <span class="ml-2 badge-info">${escapeHtml(ep.method)}</span>
-        </td>
-        <td class="text-slate-400">${ep.intervalSeconds}s</td>
-        <td class="mono ${uptimeColor(ep.uptimePercent24h)}">
-            ${ep.uptimePercent24h != null
-                ? ep.uptimePercent24h.toFixed(1) + '%'
-                : '—'}
-        </td>
-        <td class="mono text-brand-400">
-            ${ep.lastLatencyMs != null ? ep.lastLatencyMs + 'ms' : '—'}
-        </td>
-        <td class="text-slate-500 text-xs">
-            ${formatTimestamp(ep.lastCheckedAt)}
-        </td>
-        <td>${statusBadge(ep.currentStatus)}</td>
-        <td>
-            <!--
-                Toggle checkbox:
-                data-id used by toggleEndpoint() to find endpoint id
-                checked state reflects ep.enabled from contract
-            -->
-            <label class="flex items-center cursor-pointer">
-                <input type="checkbox"
-                       class="toggle-checkbox w-4 h-4 accent-brand-500"
-                       data-id="${ep.id}"
-                       ${ep.enabled ? 'checked' : ''}/>
-                <span class="ml-2 text-xs text-slate-500">
-                    ${ep.enabled ? 'On' : 'Off'}
-                </span>
-            </label>
-        </td>
-        <td>
-            <button class="delete-btn text-xs text-slate-500
-                           hover:text-red-400 transition-colors"
-                    data-id="${ep.id}">
-                Delete
-            </button>
-        </td>
-    `;
-
-    // Attach toggle listener
-    const toggleEl = tr.querySelector('.toggle-checkbox');
-    toggleEl.addEventListener('change', () => toggleEndpoint(ep.id, tr, toggleEl));
-
-    // Attach delete listener
-    const deleteEl = tr.querySelector('.delete-btn');
-    deleteEl.addEventListener('click', () => deleteEndpoint(ep.id, tr));
-
-    return tr;
-}
-
-// ── Add endpoint ────────────────────────────────────────────────────
+// ── Form submit ───────────────────────────────────────────────────────
+addForm.addEventListener('submit', handleAddSubmit);
 
 /**
  * Handles add form submit.
  * POSTs to /api/monitor with JSON body.
- * On 201 → redirects to /monitor/{id} (the detail page).
- * Contract request body: { url, method, intervalSeconds,
- *                          expectedStatusCode, enabled }
- * Contract 201 response contains: id (used to build redirect URL)
+ * On 201 → redirects to /monitor/{id}.
+ * Contract request body:
+ *   { url, method, intervalSeconds, expectedStatusCode, enabled }
+ * Contract 201 response: { id, url, method, ... }
  */
 async function handleAddSubmit(e) {
     e.preventDefault();
@@ -218,7 +93,7 @@ async function handleAddSubmit(e) {
     try {
         const response = await fetch('/api/monitor', {
             method: 'POST',
-            headers: authHeaders(true),
+            headers: authHeaders(),
             body: JSON.stringify(payload)
         });
 
@@ -232,7 +107,7 @@ async function handleAddSubmit(e) {
         // Contract: 201 response contains id of newly created endpoint
         const newEndpoint = await response.json();
 
-        // Redirect to the detail page of the newly created endpoint
+        // Redirect to detail page of newly created endpoint
         window.location.href = `/monitor/${newEndpoint.id}`;
 
     } catch (err) {
@@ -243,159 +118,7 @@ async function handleAddSubmit(e) {
     }
 }
 
-// ── Toggle endpoint ─────────────────────────────────────────────────
-
-/**
- * PATCHes /api/monitor/{id}/toggle.
- * Contract response: { id, enabled }
- * On success → updates the label text in the row.
- * On failure → reverts the checkbox state.
- * @param {number} id
- * @param {HTMLElement} row
- * @param {HTMLElement} checkbox
- */
-async function toggleEndpoint(id, row, checkbox) {
-    const previousState = !checkbox.checked;
-
-    try {
-        const response = await fetch(`/api/monitor/${id}/toggle`, {
-            method: 'PATCH',
-            headers: authHeaders(false)
-        });
-
-        if (!response.ok) {
-            // Revert checkbox if toggle failed
-            checkbox.checked = previousState;
-            const err = await response.json();
-            showAddError(err.message || 'Failed to toggle endpoint.');
-            return;
-        }
-
-        // Contract response: { id, enabled }
-        const result = await response.json();
-
-        // Update label text next to checkbox
-        const label = checkbox.nextElementSibling;
-        if (label) {
-            label.textContent = result.enabled ? 'On' : 'Off';
-        }
-
-    } catch (err) {
-        checkbox.checked = previousState;
-        showAddError('Could not connect to the server.');
-        console.error('Toggle error:', err);
-    }
-}
-
-// ── Delete endpoint ─────────────────────────────────────────────────
-
-/**
- * DELETEs /api/monitor/{id}.
- * Contract response: 204 No Content — no body.
- * On success → removes the row from DOM.
- * If no rows remain → shows empty state.
- * @param {number} id
- * @param {HTMLElement} row
- */
-async function deleteEndpoint(id, row) {
-    try {
-        const response = await fetch(`/api/monitor/${id}`, {
-            method: 'DELETE',
-            headers: authHeaders(false)
-        });
-
-        // Contract: 204 No Content on success
-        if (response.status !== 204) {
-            const err = await response.json();
-            showAddError(err.message || 'Failed to delete endpoint.');
-            return;
-        }
-
-        // Remove row from DOM
-        row.remove();
-
-        // If no rows remain, show empty state
-        if (monitorBodyEl.children.length === 0) {
-            tableWrapperEl.classList.add('hidden');
-            emptyEl.classList.remove('hidden');
-        }
-
-    } catch (err) {
-        showAddError('Could not connect to the server.');
-        console.error('Delete error:', err);
-    }
-}
-
-// ── Render helpers ──────────────────────────────────────────────────
-
-/**
- * Returns status badge HTML.
- * Contract currentStatus values: "UP" | "DOWN" | "UNKNOWN"
- * @param {string} status
- * @returns {string}
- */
-function statusBadge(status) {
-    if (status === 'UP')      return '<span class="badge-success">UP</span>';
-    if (status === 'DOWN')    return '<span class="badge-danger">DOWN</span>';
-    return '<span class="badge-info">UNKNOWN</span>';
-}
-
-/**
- * Returns color class based on uptime percentage.
- * @param {number|null} pct
- * @returns {string}
- */
-function uptimeColor(pct) {
-    if (pct == null)   return 'text-slate-500';
-    if (pct >= 99)     return 'text-green-400';
-    if (pct >= 95)     return 'text-yellow-400';
-    return 'text-red-400';
-}
-
-/**
- * Formats ISO 8601 timestamp.
- * Contract: timestamps are "2026-05-17T10:29:00"
- * lastCheckedAt can be null if endpoint was never checked.
- * @param {string|null} isoString
- * @returns {string}
- */
-function formatTimestamp(isoString) {
-    if (!isoString) return 'Never';
-    return isoString.substring(0, 16).replace('T', ' ');
-}
-
-/**
- * Escapes HTML to prevent XSS when injecting user data into innerHTML.
- * @param {string} str
- * @returns {string}
- */
-function escapeHtml(str) {
-    if (!str) return '';
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-// ── State management ────────────────────────────────────────────────
-
-/**
- * Shows one of four states: loading | error | empty | table
- * @param {string} state
- * @param {string} [message] - only used for error state
- */
-function showState(state, message = '') {
-    loadingEl.classList.add('hidden');
-    errorEl.classList.add('hidden');
-    emptyEl.classList.add('hidden');
-    tableWrapperEl.classList.add('hidden');
-
-    if (state === 'loading') loadingEl.classList.remove('hidden');
-    if (state === 'error')   { errorMsgEl.textContent = message; errorEl.classList.remove('hidden'); }
-    if (state === 'empty')   emptyEl.classList.remove('hidden');
-    if (state === 'table')   tableWrapperEl.classList.remove('hidden');
-}
+// ── Helpers ───────────────────────────────────────────────────────────
 
 function showAddError(message) {
     addErrorBox.textContent = message;
