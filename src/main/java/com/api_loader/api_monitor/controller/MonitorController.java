@@ -8,27 +8,16 @@ import com.api_loader.api_monitor.model.User;
 import com.api_loader.api_monitor.service.MonitorService;
 import com.api_loader.api_monitor.service.UserService;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
-import java.util.Map;
 
-/**
- * MonitorController — REST endpoints for the API monitor feature.
- *
- * BASE URL: /api/monitor
- *
- * All endpoints require authentication — Spring Security
- * blocks unauthenticated requests before they reach here.
- *
- * ERROR HANDLING:
- *   This controller does NOT use try/catch.
- *   All exceptions (EndpointNotFoundException, AccessDeniedException,
- *   validation errors) bubble up to GlobalExceptionHandler
- *   which maps them to the correct HTTP status and JSON shape.
- */
+@Slf4j
 @RestController
 @RequestMapping("/api/monitor")
 public class MonitorController {
@@ -42,30 +31,24 @@ public class MonitorController {
         this.userService    = userService;
     }
 
-    // ── GET /api/monitor ────────────────────────────────────────────────────
-    // Returns all endpoints for the logged-in user with latest UP/DOWN status.
-    // Dev C uses this to render the status board on monitor-list.html.
+    // ── GET /api/monitor ────────────────────────────────────────────
     @GetMapping
     public ResponseEntity<List<EndpointStatusResponse>> getEndpoints(
             Authentication authentication) {
 
         User user = getUser(authentication);
-        List<EndpointStatusResponse> endpoints = monitorService.getEndpoints(user);
-        return ResponseEntity.ok(endpoints);
+        return ResponseEntity.ok(monitorService.getEndpoints(user));
     }
 
-    // ── POST /api/monitor ───────────────────────────────────────────────────
-    // Adds a new monitored endpoint.
-    // @Valid triggers AddEndpointRequest validation — 400 if invalid.
-    // Returns 201 Created with the new endpoint's ID.
-
+    // ── POST /api/monitor ───────────────────────────────────────────
     @PostMapping
     public ResponseEntity<EndpointStatusResponse> addEndpoint(
             @Valid @RequestBody AddEndpointRequest request,
             Authentication authentication) {
 
         User user = getUser(authentication);
-        MonitoredEndpoint saved = monitorService.addEndpoint(request, user);
+        MonitoredEndpoint saved =
+                monitorService.addEndpoint(request, user);
 
         return ResponseEntity.status(201).body(
             EndpointStatusResponse.builder()
@@ -80,13 +63,13 @@ public class MonitorController {
                 .lastLatencyMs(null)
                 .lastStatusCode(null)
                 .lastErrorMsg(null)
+                .currentStatus("UNKNOWN")
+                .uptimePercent24h(null)
                 .build()
         );
     }
-    // ── DELETE /api/monitor/{id} ────────────────────────────────────────────
-    // Deletes an endpoint and all its MonitorResult history.
-    // 404 if not found. 403 if it belongs to another user.
-    // Returns 204 No Content on success — no body needed.
+
+    // ── DELETE /api/monitor/{id} ────────────────────────────────────
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteEndpoint(
             @PathVariable Long id,
@@ -97,25 +80,18 @@ public class MonitorController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── PATCH /api/monitor/{id}/toggle ──────────────────────────────────────
-    // Flips enabled on/off for an endpoint.
-    // Returns the updated EndpointStatusResponse so Dev C can
-    // immediately update the toggle switch state on the UI.
+    // ── PATCH /api/monitor/{id}/toggle ──────────────────────────────
     @PatchMapping("/{id}/toggle")
     public ResponseEntity<EndpointStatusResponse> toggleEndpoint(
             @PathVariable Long id,
             Authentication authentication) {
 
         User user = getUser(authentication);
-        EndpointStatusResponse updated = monitorService.toggleEndpoint(id, user);
-        return ResponseEntity.ok(updated);
+        return ResponseEntity.ok(
+                monitorService.toggleEndpoint(id, user));
     }
 
-    // ── GET /api/monitor/{id}/results?hours=24 ──────────────────────────────
-    // Returns uptime stats + raw result list for the detail page chart.
-    // hours param defaults to 24 if not provided.
-    // Dev C uses uptimePercent for the stat card,
-    // and results list for the Chart.js latency line chart.
+    // ── GET /api/monitor/{id}/results?hours=24 ──────────────────────
     @GetMapping("/{id}/results")
     public ResponseEntity<EndpointHistoryResponse> getHistory(
             @PathVariable Long id,
@@ -123,11 +99,56 @@ public class MonitorController {
             Authentication authentication) {
 
         User user = getUser(authentication);
-        EndpointHistoryResponse history = monitorService.getHistory(id, user, hours);
-        return ResponseEntity.ok(history);
+        return ResponseEntity.ok(
+                monitorService.getHistory(id, user, hours));
     }
 
-    // ── Helper ──────────────────────────────────────────────────────────────
+    // ── GET /api/monitor/stream ─────────────────────────────────────
+    //
+    // WHAT THIS IS:
+    //   SSE stream endpoint. The browser connects once and
+    //   receives real-time updates whenever a monitor check
+    //   completes — pushed directly from the scheduler.
+    //
+    // HOW IT WORKS NOW (broadcaster pattern):
+    //   1. Browser opens EventSource('/api/monitor/stream')
+    //   2. This method calls monitorService.registerEmitter(user)
+    //   3. MonitorService adds the emitter to a ConcurrentHashMap
+    //      keyed by userId
+    //   4. Sends current status immediately on connect
+    //   5. Every time the scheduler runs checkEndpoint() and a
+    //      real ping happens → MonitorService calls pushToEmitters()
+    //      which sends the updated status list to all open tabs
+    //      for that user instantly
+    //   6. Browser receives event → re-renders the status board
+    //
+    // WHAT DEV C DOES:
+    //   const source = new EventSource('/api/monitor/stream');
+    //   source.addEventListener('status', (e) => {
+    //     const endpoints = JSON.parse(e.data);
+    //     renderStatusBoard(endpoints);
+    //   });
+    //   source.onerror = () => source.close();
+    //
+    // WHY this is better than the polling loop approach:
+    //   Old: browser waited up to 15s for any update
+    //   New: browser gets the update within milliseconds
+    //        of the check completing
+    @GetMapping(value = "/stream",
+                produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamStatus(Authentication authentication) {
+
+        User user = getUser(authentication);
+
+        // MonitorService handles everything:
+        // - creates the emitter with 10-min timeout
+        // - registers cleanup callbacks
+        // - sends current status immediately
+        // - adds emitter to broadcaster map
+        return monitorService.registerEmitter(user);
+    }
+
+    // ── Helper ──────────────────────────────────────────────────────
     private User getUser(Authentication authentication) {
         return userService.findByUsername(authentication.getName());
     }
