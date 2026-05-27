@@ -1,103 +1,98 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{base :: head('Monitor')"}></head>
+<head th:replace="~{base :: head('Monitor')}"></head>
 <body>
 
 <nav th:replace="~{base :: navbar}"></nav>
 
 <!--
-    This page has NO Thymeleaf model data.
-    All data comes from JS fetching real API endpoints.
+    This page shows ONLY the add endpoint form.
+    The endpoints list lives on load-test-history.html Monitored APIs tab.
 
     JS file: monitor-list.js
-
-    APIs consumed:
-      GET    /api/monitor              → load all endpoints
-      POST   /api/monitor              → add new endpoint
-      PATCH  /api/monitor/{id}/toggle  → enable / disable
-      DELETE /api/monitor/{id}         → remove endpoint
-
-    Contract response shape for GET /api/monitor (array):
-    [
-      {
-        id:                 1,
-        url:                "https://api.example.com/health",
-        method:             "GET",
-        intervalSeconds:    60,
-        expectedStatusCode: 200,
-        enabled:            true,
-        currentStatus:      "UP",
-        lastCheckedAt:      "2026-05-17T10:29:00",
-        lastLatencyMs:      88,          ← can be null
-        uptimePercent24h:   99.3
-      }
-    ]
+    On successful POST → redirects to /monitor/{newEndpoint.id}
 
     Contract POST /api/monitor request body:
     {
-      url, method, intervalSeconds, expectedStatusCode, enabled
+      url:                string,
+      method:             string  (GET | POST | PUT | DELETE),
+      intervalSeconds:    int,
+      expectedStatusCode: int,
+      enabled:            boolean
     }
-
-    CSRF: POST, PATCH, DELETE all read token from base.html meta tags
+    Response 201: { id, url, method, intervalSeconds,
+                    expectedStatusCode, enabled, currentStatus,
+                    lastCheckedAt, lastLatencyMs, uptimePercent24h }
 -->
 
-<main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+<main class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
 
-    <!-- Page header -->
+    <!-- Header -->
     <div class="mb-8 fade-up">
-        <h1 class="text-2xl font-semibold text-white">API Monitor</h1>
+        <a th:href="@{/load-test/history}"
+           class="inline-flex items-center gap-1.5 text-sm text-slate-500
+                  hover:text-slate-300 transition-colors mb-4">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M15 19l-7-7 7-7"/>
+            </svg>
+            Back to History
+        </a>
+        <h1 class="text-2xl font-semibold text-white">Add Monitored Endpoint</h1>
         <p class="mt-1 text-sm text-slate-500">
-            Endpoints are checked automatically on a schedule.
+            Register an endpoint to be checked automatically on a schedule.
         </p>
     </div>
 
-    <!-- Add endpoint form -->
-    <div class="card mb-8 fade-up">
-        <h2 class="text-base font-semibold text-white mb-5">Add Endpoint</h2>
+    <!-- Inline error box -->
+    <!--
+        id="add-error-box"
+        monitor-list.js: shows on POST failure (Decision 4)
+    -->
+    <div id="add-error-box" class="hidden mb-6"></div>
 
-        <!--
-            id="add-error-box"
-            monitor-list.js: shows inline error on POST failure (Decision 4)
-        -->
-        <div id="add-error-box" class="hidden mb-4"></div>
+    <!-- Add form card -->
+    <div class="card fade-up">
 
         <!--
             id="add-form"
             monitor-list.js: attaches submit listener here
-            Uses fetch() not standard form POST — need to read 201 response
-            and append new row without page reload
+            Uses fetch() not standard POST — need to read 201 response
+            and redirect to /monitor/{id}
         -->
-        <form id="add-form" class="space-y-4">
+        <form id="add-form" class="space-y-6">
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Target URL -->
+            <div>
+                <label for="add-url"
+                       class="block text-sm font-medium text-slate-300 mb-1.5">
+                    Endpoint URL <span class="text-red-400 ml-0.5">*</span>
+                </label>
+                <!--
+                    id="add-url"
+                    monitor-list.js: reads as payload.url (string)
+                -->
+                <input type="url"
+                       id="add-url"
+                       class="form-input"
+                       placeholder="https://api.example.com/health"
+                       required/>
+            </div>
 
-                <!-- URL -->
-                <div class="md:col-span-2">
-                    <label for="add-url"
-                           class="block text-sm font-medium text-slate-300 mb-1.5">
-                        Endpoint URL <span class="text-red-400 ml-0.5">*</span>
-                    </label>
-                    <!--
-                        id="add-url"
-                        monitor-list.js: reads as payload.url (string)
-                    -->
-                    <input type="url"
-                           id="add-url"
-                           class="form-input"
-                           placeholder="https://api.example.com/health"
-                           required/>
-                </div>
-
-                <!-- Method -->
+            <!-- Method + Expected Status -->
+            <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label for="add-method"
                            class="block text-sm font-medium text-slate-300 mb-1.5">
-                        Method
+                        HTTP Method
                     </label>
                     <!--
                         id="add-method"
-                        monitor-list.js: reads as payload.method (string)
-                        Contract values: GET | POST | PUT | DELETE
+                        monitor-list.js: reads as payload.method
+                        Also controls body section visibility:
+                          POST/PUT → show body + content-type
+                          GET/DELETE → hide body + content-type
                     -->
                     <select id="add-method" class="form-input">
                         <option value="GET">GET</option>
@@ -106,8 +101,6 @@
                         <option value="DELETE">DELETE</option>
                     </select>
                 </div>
-
-                <!-- Expected status code -->
                 <div>
                     <label for="add-expected-status"
                            class="block text-sm font-medium text-slate-300 mb-1.5">
@@ -124,52 +117,117 @@
                            min="100"
                            max="599"/>
                 </div>
+            </div>
 
-                <!-- Interval -->
+            <!-- Interval -->
+            <div>
+                <label for="add-interval"
+                       class="block text-sm font-medium text-slate-300 mb-1.5">
+                    Check Interval (seconds)
+                </label>
+                <!--
+                    id="add-interval"
+                    monitor-list.js: reads as payload.intervalSeconds (int)
+                -->
+                <input type="number"
+                       id="add-interval"
+                       class="form-input"
+                       value="60"
+                       min="10"
+                       max="3600"/>
+                <p class="mt-1 text-xs text-slate-600">
+                    How often to ping this endpoint
+                </p>
+            </div>
+
+            <!-- Body section — shown only for POST and PUT -->
+            <!--
+                id="body-section"
+                monitor-list.js: toggles hidden class based on method
+            -->
+            <div id="body-section" class="hidden space-y-4">
+
+                <!-- Content type -->
                 <div>
-                    <label for="add-interval"
+                    <label for="add-content-type"
                            class="block text-sm font-medium text-slate-300 mb-1.5">
-                        Check Interval (seconds)
+                        Content-Type
                     </label>
                     <!--
-                        id="add-interval"
-                        monitor-list.js: reads as payload.intervalSeconds (int)
+                        id="add-content-type"
+                        Tells the server what format the body is in
+                        Default: application/json
                     -->
-                    <input type="number"
-                           id="add-interval"
-                           class="form-input"
-                           value="60"
-                           min="10"
-                           max="3600"/>
-                    <p class="mt-1 text-xs text-slate-600">
-                        How often to ping this endpoint
-                    </p>
+                    <select id="add-content-type" class="form-input">
+                        <option value="application/json">application/json</option>
+                        <option value="application/x-www-form-urlencoded">
+                            application/x-www-form-urlencoded
+                        </option>
+                        <option value="text/plain">text/plain</option>
+                    </select>
                 </div>
 
-                <!-- Enabled toggle -->
-                <div class="flex items-end pb-1">
-                    <label class="flex items-center gap-3 cursor-pointer">
-                        <!--
-                            id="add-enabled"
-                            monitor-list.js: reads .checked as payload.enabled (boolean)
-                        -->
-                        <input type="checkbox"
-                               id="add-enabled"
-                               class="w-4 h-4 accent-brand-500"
-                               checked/>
-                        <span class="text-sm text-slate-300">Enable monitoring</span>
+                <!-- Request body -->
+                <div>
+                    <label for="add-request-body"
+                           class="block text-sm font-medium text-slate-300 mb-1.5">
+                        Request Body
+                        <span class="text-xs text-slate-600 font-normal ml-1">
+                            (optional)
+                        </span>
                     </label>
+                    <!--
+                        id="add-request-body"
+                        monitor-list.js: reads as payload body for POST/PUT
+                    -->
+                    <textarea id="add-request-body"
+                              class="form-input font-mono text-sm"
+                              rows="4"
+                              placeholder='{"key": "value"}'></textarea>
                 </div>
 
             </div>
 
+            <!-- Enabled toggle -->
+            <div class="flex items-center gap-3">
+                <!--
+                    id="add-enabled"
+                    monitor-list.js: reads .checked as payload.enabled (boolean)
+                -->
+                <input type="checkbox"
+                       id="add-enabled"
+                       class="w-4 h-4 accent-brand-500"
+                       checked/>
+                <label for="add-enabled"
+                       class="text-sm text-slate-300 cursor-pointer">
+                    Enable monitoring immediately
+                </label>
+            </div>
+
+            <!-- Info strip -->
+            <div class="flex items-start gap-3 rounded-lg bg-brand-500/5
+                        border border-brand-500/15 px-4 py-3">
+                <svg class="h-4 w-4 text-brand-400 shrink-0 mt-0.5"
+                     fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd"
+                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"/>
+                </svg>
+                <p class="text-xs text-slate-500 leading-relaxed">
+                    The endpoint will be pinged automatically every
+                    <strong class="text-slate-400">interval</strong> seconds.
+                    After saving you will be taken to the detail page
+                    where you can see live status and history.
+                </p>
+            </div>
+
             <!-- Submit button -->
-            <!--
-                id="add-submit-btn"  — monitor-list.js disables during POST
-                id="add-btn-text"    — monitor-list.js changes text during POST
-                id="add-btn-spinner" — monitor-list.js shows during POST
-            -->
             <div class="pt-2">
+                <!--
+                    id="add-submit-btn"  — monitor-list.js disables during POST
+                    id="add-btn-icon"    — monitor-list.js hides during POST
+                    id="add-btn-spinner" — monitor-list.js shows during POST
+                    id="add-btn-text"    — monitor-list.js changes text
+                -->
                 <button type="submit" id="add-submit-btn"
                         class="btn-primary flex items-center gap-2">
                     <svg id="add-btn-icon" class="h-4 w-4" fill="none"
@@ -188,100 +246,6 @@
             </div>
 
         </form>
-    </div>
-
-    <!-- Status board section -->
-    <div class="fade-up">
-        <h2 class="text-base font-semibold text-white mb-4">Monitored Endpoints</h2>
-
-        <!-- Loading state -->
-        <!--
-            id="monitor-loading"
-            monitor-list.js: hides when data arrives
-        -->
-        <div id="monitor-loading"
-             class="flex items-center gap-3 text-slate-500 text-sm py-8">
-            <svg class="h-4 w-4 spinner" fill="none" viewBox="0 0 24 24"
-                 stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                      d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
-            </svg>
-            Loading endpoints...
-        </div>
-
-        <!-- Error state -->
-        <!--
-            id="monitor-error"
-            id="monitor-error-msg"
-            monitor-list.js: shows on GET /api/monitor failure
-        -->
-        <div id="monitor-error" class="hidden">
-            <div class="card text-center py-12">
-                <svg class="h-10 w-10 text-red-400 mx-auto mb-3" fill="none"
-                     viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                          d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-                </svg>
-                <p class="text-slate-400 text-sm mb-1">
-                    Could not load monitored endpoints.
-                </p>
-                <p id="monitor-error-msg" class="text-slate-600 text-xs"></p>
-            </div>
-        </div>
-
-        <!-- Empty state -->
-        <!--
-            id="monitor-empty"
-            monitor-list.js: shows when GET /api/monitor returns []
-        -->
-        <div id="monitor-empty" class="hidden">
-            <div class="card text-center py-16">
-                <div class="h-16 w-16 rounded-2xl bg-surface-card border
-                            border-surface-border flex items-center
-                            justify-center mx-auto mb-4">
-                    <svg class="h-8 w-8 text-slate-600" fill="none"
-                         viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                              d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546"/>
-                    </svg>
-                </div>
-                <h3 class="text-base font-medium text-slate-400 mb-2">
-                    No endpoints monitored yet
-                </h3>
-                <p class="text-sm text-slate-600">
-                    Add your first endpoint using the form above.
-                </p>
-            </div>
-        </div>
-
-        <!-- Endpoints table -->
-        <!--
-            id="monitor-table-wrapper"
-            monitor-list.js: removes hidden class when rows are ready
-        -->
-        <div id="monitor-table-wrapper" class="hidden card p-0 overflow-hidden">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Endpoint</th>
-                        <th>Interval</th>
-                        <th>Uptime 24h</th>
-                        <th>Last Latency</th>
-                        <th>Last Checked</th>
-                        <th>Status</th>
-                        <th>Enabled</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <!--
-                    id="monitor-body"
-                    monitor-list.js: injects <tr> rows here
-                    one row per item in GET /api/monitor response
-                -->
-                <tbody id="monitor-body"></tbody>
-            </table>
-        </div>
-
     </div>
 
 </main>
