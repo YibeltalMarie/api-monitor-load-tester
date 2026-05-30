@@ -18,7 +18,8 @@
       method:             string  (GET | POST | PUT | DELETE),
       intervalSeconds:    int,
       expectedStatusCode: int,
-      enabled:            boolean
+      enabled:            boolean,
+      alertEmail:         string | null  ← NEW
     }
     Response 201: { id, url, method, intervalSeconds,
                     expectedStatusCode, enabled, currentStatus,
@@ -153,11 +154,6 @@
                            class="block text-sm font-medium text-slate-300 mb-1.5">
                         Content-Type
                     </label>
-                    <!--
-                        id="add-content-type"
-                        Tells the server what format the body is in
-                        Default: application/json
-                    -->
                     <select id="add-content-type" class="form-input">
                         <option value="application/json">application/json</option>
                         <option value="application/x-www-form-urlencoded">
@@ -176,16 +172,39 @@
                             (optional)
                         </span>
                     </label>
-                    <!--
-                        id="add-request-body"
-                        monitor-list.js: reads as payload body for POST/PUT
-                    -->
                     <textarea id="add-request-body"
                               class="form-input font-mono text-sm"
                               rows="4"
                               placeholder='{"key": "value"}'></textarea>
                 </div>
 
+            </div>
+
+            <!-- Alert Email — NEW field -->
+            <div>
+                <label for="add-alert-email"
+                       class="block text-sm font-medium text-slate-300 mb-1.5">
+                    Alert Email
+                    <span class="text-xs text-slate-600 font-normal ml-1">
+                        (optional)
+                    </span>
+                </label>
+                <!--
+                    id="add-alert-email"
+                    monitor-list.js: reads as payload.alertEmail (string | null)
+                    Contract field name: alertEmail
+                    If left empty → JS sends null → Dev B skips sending email
+                    If filled → Dev B sends alert when endpoint goes DOWN
+                               and recovery email when it comes back UP
+                -->
+                <input type="email"
+                       id="add-alert-email"
+                       class="form-input"
+                       placeholder="you@example.com"/>
+                <p class="mt-1 text-xs text-slate-600">
+                    You will be notified when this endpoint goes DOWN or recovers.
+                    Leave empty to disable email alerts for this endpoint.
+                </p>
             </div>
 
             <!-- Enabled toggle -->
@@ -222,12 +241,6 @@
 
             <!-- Submit button -->
             <div class="pt-2">
-                <!--
-                    id="add-submit-btn"  — monitor-list.js disables during POST
-                    id="add-btn-icon"    — monitor-list.js hides during POST
-                    id="add-btn-spinner" — monitor-list.js shows during POST
-                    id="add-btn-text"    — monitor-list.js changes text
-                -->
                 <button type="submit" id="add-submit-btn"
                         class="btn-primary flex items-center gap-2">
                     <svg id="add-btn-icon" class="h-4 w-4" fill="none"
