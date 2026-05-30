@@ -26,4 +26,7 @@ public interface MonitorResultRepository
     // Count UP checks in window
     long countByEndpointAndIsUpTrueAndCheckedAtAfter(
             MonitoredEndpoint endpoint, OffsetDateTime after);
+
+    // In MonitorResultRepository:
+    void deleteByEndpoint(MonitoredEndpoint endpoint);
 }

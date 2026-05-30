@@ -8,6 +8,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.api_loader.api_monitor.exception.AccessDeniedException;
+
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.stream.Collectors;

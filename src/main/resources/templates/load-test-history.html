@@ -1,126 +1,271 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{base :: head('Test History')}"></head>
+<head th:replace="~{base :: head('History')}"></head>
 <body>
 
 <nav th:replace="~{base :: navbar}"></nav>
 
 <!--
     This page has NO Thymeleaf model data.
-    All data comes from JS fetching GET /api/load-test/history
+    All data comes from JS fetching real API endpoints.
 
     JS file: load-test-history.js
-    API response shape (array of objects):
-    [
-      {
-        "id":                 "a1b2c3d4",
-        "url":                "https://api.example.com/users",
-        "method":             "GET",
-        "totalRequests":      100,
-        "status":             "COMPLETED",
-        "startTime":          "2026-05-17T10:30:00",
-        "avgLatencyMs":       142,
-        "successRatePercent": 97.0
-      }
-    ]
 
-    JS reads these exact field names from the contract.
-    JS builds table rows dynamically and injects into tbody#runs-body
+    Two tabs:
+    Tab 1 — Load Tests
+      Fetches: GET /api/load-test/history
+      Contract response fields:
+        id, url, method, totalRequests, status,
+        startTime, avgLatencyMs, successRatePercent
+      Click row → /load-test/{id}/result
+
+    Tab 2 — Monitored APIs
+      Fetches: GET /api/monitor
+      Contract response fields:
+        id, url, method, intervalSeconds,
+        currentStatus, lastCheckedAt,
+        lastLatencyMs, uptimePercent24h
+      Click row → /monitor/{id}
+
+    Default tab on page load: Load Tests (tab 1)
 -->
 
 <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
 
-    <!-- Header -->
+    <!-- Page header -->
     <div class="flex items-center justify-between mb-8 fade-up">
         <div>
-            <h1 class="text-2xl font-semibold text-white">Test History</h1>
-            <p class="mt-1 text-sm text-slate-500">All your past load test runs.</p>
+            <h1 class="text-2xl font-semibold text-white">History</h1>
+            <p class="mt-1 text-sm text-slate-500">
+                Browse your load test runs and monitored API history.
+            </p>
         </div>
-        <a th:href="@{/load-test/new}" class="btn-primary inline-flex items-center gap-2">
+        <a th:href="@{/load-test/new}"
+           class="btn-primary inline-flex items-center gap-2">
             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24"
                  stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M12 4v16m8-8H4"/>
             </svg>
             New Test
         </a>
     </div>
 
-    <!-- Loading state — shown by default, hidden by JS when data arrives -->
-    <div id="history-loading" class="flex items-center gap-3 text-slate-500 text-sm py-8">
-        <svg class="h-4 w-4 spinner" fill="none" viewBox="0 0 24 24"
-             stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
-        </svg>
-        Loading test history...
-    </div>
-
-    <!-- Error state — shown by JS on fetch failure -->
+    <!-- Tab buttons -->
     <!--
-        id="history-error" — JS shows this with error message on fetch failure
+        id="tab-load-tests"  — active by default on page load
+        id="tab-monitored"   — inactive by default
+        load-test-history.js attaches click listeners to both
+        On click: switches active style, hides one section shows other
     -->
-    <div id="history-error" class="hidden">
-        <div class="card text-center py-12">
-            <svg class="h-10 w-10 text-red-400 mx-auto mb-3" fill="none"
-                 viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+    <div class="flex items-center gap-3 mb-6 fade-up">
+        <button id="tab-load-tests"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg
+                       bg-brand-500 text-white text-sm font-medium
+                       transition-all">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round"
-                      d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                      d="M3 13.5l4-4 4 4 4-8 4 4"/>
             </svg>
-            <p class="text-slate-400 text-sm mb-1">Could not load test history.</p>
-            <p id="history-error-msg" class="text-slate-600 text-xs"></p>
-        </div>
+            Load Tests
+        </button>
+        <button id="tab-monitored"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg
+                       border border-surface-border text-slate-400
+                       text-sm font-medium hover:text-white
+                       hover:border-slate-500 transition-all">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546"/>
+            </svg>
+            Monitored APIs
+        </button>
     </div>
 
-    <!-- Empty state — shown by JS when API returns empty array [] -->
+    <!-- ── Tab 1: Load Tests ──────────────────────────────────────── -->
     <!--
-        id="history-empty" — JS shows this when runs array length is 0
+        id="section-load-tests"
+        load-test-history.js: visible by default, hidden when tab 2 clicked
     -->
-    <div id="history-empty" class="hidden">
-        <div class="card text-center py-20">
-            <div class="h-16 w-16 rounded-2xl bg-surface-card border border-surface-border
-                        flex items-center justify-center mx-auto mb-4">
-                <svg class="h-8 w-8 text-slate-600" fill="none" viewBox="0 0 24 24"
-                     stroke="currentColor" stroke-width="1.5">
+    <div id="section-load-tests">
+
+        <!-- Loading state -->
+        <div id="runs-loading"
+             class="flex items-center gap-3 text-slate-500 text-sm py-8">
+            <svg class="h-4 w-4 spinner" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+            </svg>
+            Loading test history...
+        </div>
+
+        <!-- Error state -->
+        <div id="runs-error" class="hidden">
+            <div class="card text-center py-12">
+                <svg class="h-10 w-10 text-red-400 mx-auto mb-3" fill="none"
+                     viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round"
-                          d="M3 13.5l4-4 4 4 4-8 4 4"/>
+                          d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
                 </svg>
+                <p class="text-slate-400 text-sm mb-1">
+                    Could not load test history.
+                </p>
+                <p id="runs-error-msg" class="text-slate-600 text-xs"></p>
             </div>
-            <h3 class="text-base font-medium text-slate-400 mb-2">No tests yet</h3>
-            <p class="text-sm text-slate-600 mb-6">
-                Run your first load test to see results here.
-            </p>
-            <a th:href="@{/load-test/new}" class="btn-primary">Start a test</a>
         </div>
+
+        <!-- Empty state -->
+        <div id="runs-empty" class="hidden">
+            <div class="card text-center py-20">
+                <div class="h-16 w-16 rounded-2xl bg-surface-card
+                            border border-surface-border flex items-center
+                            justify-center mx-auto mb-4">
+                    <svg class="h-8 w-8 text-slate-600" fill="none"
+                         viewBox="0 0 24 24" stroke="currentColor"
+                         stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M3 13.5l4-4 4 4 4-8 4 4"/>
+                    </svg>
+                </div>
+                <h3 class="text-base font-medium text-slate-400 mb-2">
+                    No tests yet
+                </h3>
+                <p class="text-sm text-slate-600 mb-6">
+                    Run your first load test to see results here.
+                </p>
+                <a th:href="@{/load-test/new}" class="btn-primary">
+                    Start a test
+                </a>
+            </div>
+        </div>
+
+        <!-- Table shell -->
+        <!--
+            id="runs-table-wrapper"
+            load-test-history.js: removes hidden when rows are ready
+        -->
+        <div id="runs-table-wrapper" class="hidden card p-0 overflow-hidden">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Endpoint</th>
+                        <th>Requests</th>
+                        <th>Avg Latency</th>
+                        <th>Success Rate</th>
+                        <th>Started</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <!--
+                    id="runs-body"
+                    load-test-history.js: injects <tr> rows here
+                    Contract fields: id, url, method, totalRequests,
+                    status, startTime, avgLatencyMs, successRatePercent
+                -->
+                <tbody id="runs-body"></tbody>
+            </table>
+        </div>
+
     </div>
 
-    <!-- Table shell — hidden until JS fills it with rows -->
+    <!-- ── Tab 2: Monitored APIs ──────────────────────────────────── -->
     <!--
-        id="history-table-wrapper" — JS removes hidden class when rows are ready
+        id="section-monitored"
+        load-test-history.js: hidden by default, shown when tab 2 clicked
+        Fetches GET /api/monitor only when tab is first opened (lazy load)
     -->
-    <div id="history-table-wrapper" class="hidden card p-0 overflow-hidden fade-up">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Endpoint</th>
-                    <th>Requests</th>
-                    <th>Avg Latency</th>
-                    <th>Success Rate</th>
-                    <th>Started</th>
-                    <th>Status</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <!--
-                id="runs-body" — JS injects <tr> elements here
-                one row per item in the API response array
-            -->
-            <tbody id="runs-body"></tbody>
-        </table>
+    <div id="section-monitored" class="hidden">
+
+        <!-- Loading state -->
+        <div id="monitor-loading"
+             class="flex items-center gap-3 text-slate-500 text-sm py-8">
+            <svg class="h-4 w-4 spinner" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+            </svg>
+            Loading monitored endpoints...
+        </div>
+
+        <!-- Error state -->
+        <div id="monitor-error" class="hidden">
+            <div class="card text-center py-12">
+                <svg class="h-10 w-10 text-red-400 mx-auto mb-3" fill="none"
+                     viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                </svg>
+                <p class="text-slate-400 text-sm mb-1">
+                    Could not load monitored endpoints.
+                </p>
+                <p id="monitor-error-msg" class="text-slate-600 text-xs"></p>
+            </div>
+        </div>
+
+        <!-- Empty state -->
+        <div id="monitor-empty" class="hidden">
+            <div class="card text-center py-20">
+                <div class="h-16 w-16 rounded-2xl bg-surface-card
+                            border border-surface-border flex items-center
+                            justify-center mx-auto mb-4">
+                    <svg class="h-8 w-8 text-slate-600" fill="none"
+                         viewBox="0 0 24 24" stroke="currentColor"
+                         stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546"/>
+                    </svg>
+                </div>
+                <h3 class="text-base font-medium text-slate-400 mb-2">
+                    No endpoints monitored yet
+                </h3>
+                <p class="text-sm text-slate-600 mb-6">
+                    Add your first endpoint on the monitor page.
+                </p>
+                <a th:href="@{/monitor}" class="btn-primary">
+                    Go to Monitor
+                </a>
+            </div>
+        </div>
+
+        <!-- Table shell -->
+        <!--
+            id="monitor-table-wrapper"
+            load-test-history.js: removes hidden when rows are ready
+        -->
+        <div id="monitor-table-wrapper"
+             class="hidden card p-0 overflow-hidden">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Endpoint</th>
+                        <th>Method</th>
+                        <th>Interval</th>
+                        <th>Uptime 24h</th>
+                        <th>Last Latency</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <!--
+                    id="monitor-body"
+                    load-test-history.js: injects <tr> rows here
+                    Contract fields: id, url, method, intervalSeconds,
+                    currentStatus, lastCheckedAt,
+                    lastLatencyMs, uptimePercent24h
+                    Click row → /monitor/{id}
+                -->
+                <tbody id="monitor-body"></tbody>
+            </table>
+        </div>
+
     </div>
 
 </main>
 
-<!-- load-test-history.js handles all data fetching and table building -->
 <script src="/js/load-test-history.js"></script>
 
 </body>
